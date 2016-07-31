@@ -1,6 +1,6 @@
 ## Ucsb.Sa.Enterprise.ClientExtensions
 
-This adds fucntionality for management multiple client connections within
+This adds fucntionality for managing multiple client connections within
 a config file. It also adds tracing for outgoing calls.
 
 ### Client Configurations
