@@ -1,0 +1,12 @@
+﻿<?xml version="1.0" encoding="utf-8" ?>
+<configuration xmlns:xdt="http://schemas.microsoft.com/XML-Document-Transform">
+  <configSections xdt:Transform="InsertIfMissing">
+    <section name="clientExtensions" type="Ucsb.Sa.Enterprise.ClientExtensions.Configuration.ClientExtensionsConfigurationSection,Ucsb.Sa.Enterprise.ClientExtensions" xdt:Transform="InsertIfMissing" xdt:Locator="Match(name)" />
+  </configSections>
+
+	<connectionStrings xdt:Transform="InsertIfMissing">
+		<add name="Instrumentation" connectionString="Initial Catalog=instrumentation;Data Source=instrumentation.sql.dev.sa.ucsb.edu,2433;Integrated Security=True" providerName="System.Data.SqlClient" xdt:Transform="InsertIfMissing" xdt:Locator="Match(name)" />
+	</connectionStrings>
+
+  <clientExtensions xdt:Transform="InsertIfMissing"></clientExtensions>
+</configuration>

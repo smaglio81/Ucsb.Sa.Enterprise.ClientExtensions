@@ -1,0 +1,8 @@
+﻿<?xml version="1.0" encoding="utf-8" ?>
+<configuration xmlns:xdt="http://schemas.microsoft.com/XML-Document-Transform">
+  <configSections>
+    <section name="clientExtensions" type="Ucsb.Sa.Enterprise.ClientExtensions.Configuration.ClientExtensionsConfigurationSection,Ucsb.Sa.Enterprise.ClientExtensions" xdt:Transform="Remove" xdt:Locator="Match(name)" />
+  </configSections>
+
+  <clientExtensions xdt:Transform="Remove" xdt:Locator="Match(name)"></clientExtensions>
+</configuration>
