@@ -42,7 +42,7 @@ namespace Ucsb.Sa.Enterprise.ClientExtensions
 		/// The default contract resolver used by JSON.net. This will translate
 		/// property names exactly as they are (FirstName --> FirstName).
 		/// </summary>
-		internal JsonSerializerSettings JsonNetSerializerSettings =
+		internal JsonSerializerSettings _JsonNetSerializerSettings =
 			new JsonSerializerSettings() { ContractResolver = new CamelCasePropertyNamesContractResolver() };
 
 		/// <summary>
@@ -81,6 +81,15 @@ namespace Ucsb.Sa.Enterprise.ClientExtensions
 					}
 				}
 			}
+		}
+
+		/// <summary>
+		/// The Json.NET serializer settings.
+		/// </summary>
+		public JsonSerializerSettings JsonNetSerializerSettings
+		{
+			get { return _JsonNetSerializerSettings; }
+			set { _JsonNetSerializerSettings = value; }
 		}
 
 		#endregion
