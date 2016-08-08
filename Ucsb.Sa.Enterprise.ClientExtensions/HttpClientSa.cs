@@ -1,8 +1,11 @@
 ﻿using System;
+using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
 using System.Net.Http;
 using System.Net.Http.Headers;
+using System.Runtime.Caching;
+using System.Runtime.CompilerServices;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
@@ -49,6 +52,11 @@ namespace Ucsb.Sa.Enterprise.ClientExtensions
 		/// Internal SerializeToCamelCase value. Used for the get property.
 		/// </summary>
 		internal bool SerializeToCamelCaseValue = true;
+
+		/// <summary>
+		/// Internal cache for lookup tables.
+		/// </summary>
+		internal MemoryCache _Cache = new MemoryCache("HttpClientSa");
 
 		#endregion
 
@@ -230,6 +238,81 @@ namespace Ucsb.Sa.Enterprise.ClientExtensions
 
 			var content = response.ResponseAsString();
 			return HttpResponseMessageExtensions.DeserializeHttpResponse<T>(content, datatype);
+		}
+
+		/// <summary>
+		/// Gets a cached copy of the data for a given Get operation. This should be used with lookup tables.
+		/// 
+		/// http://blog.falafel.com/working-system-runtime-caching-memorycache/
+		/// </summary>
+		/// <typeparam name="T">The type of the value returned.</typeparam>
+		/// <param name="url">The url to pull data from.</param>
+		/// <param name="datatype">The expected format of the returned data (default: json)</param>
+		/// <param name="policy">The cache item policy. (default: 6 hours absolute time)</param>
+		/// <returns>The lookup table reqeusted.</returns>
+		public T GetCached<T>(string url, string datatype = "json", CacheItemPolicy policy = null)
+		{
+			//	http://blog.falafel.com/working-system-runtime-caching-memorycache/
+			Func<T> valueFactory = () => {
+				var response = Get<T>(url: url, datatype: datatype);
+				return (T)response;
+			};
+
+			if (policy == null)
+			{
+				policy = new CacheItemPolicy() { AbsoluteExpiration = DateTimeOffset.Now.Add(TimeSpan.FromHours(6)) };
+			}
+
+			var newValue = new Lazy<T>(valueFactory);
+			var oldValue = _Cache.AddOrGetExisting(key: url, value: newValue, policy: policy) as Lazy<T>;
+			try
+			{
+				return (oldValue ?? newValue).Value;
+			}
+			catch
+			{
+				// Handle cached lazy exception by evicting from cache. Thanks to Denis Borovnev for pointing this out!
+				_Cache.Remove(key: url);
+				throw;
+			}
+		}
+
+		/// <summary>
+		/// Gets a cached copy of the data for a given Get operation. This should be used with lookup tables.
+		/// 
+		/// http://blog.falafel.com/working-system-runtime-caching-memorycache/
+		/// </summary>
+		/// <typeparam name="T">The type of the value returned.</typeparam>
+		/// <param name="url">The url to pull data from.</param>
+		/// <param name="datatype">The expected format of the returned data (default: json)</param>
+		/// <param name="policy">The cache item policy. (default: 6 hours absolute time)</param>
+		/// <returns>The lookup table reqeusted.</returns>
+		public async Task<T> GetCachedAsync<T>(string url, string datatype = "json", CacheItemPolicy policy = null)
+		{
+			//	http://blog.falafel.com/working-system-runtime-caching-memorycache/
+			Func<Task<T>> valueFactory = async () => {
+				var task = await GetAsync<T>(url: url, datatype: datatype);
+				return task;
+			};
+
+			if (policy == null)
+			{
+				policy = new CacheItemPolicy() { AbsoluteExpiration = DateTimeOffset.Now.Add(TimeSpan.FromHours(6)) };
+			}
+
+			var newValue = new AsyncLazy<T>(valueFactory);
+			var oldValue = _Cache.AddOrGetExisting(key: url, value: newValue, policy: policy) as AsyncLazy<T>;
+			try
+			{
+				var val = (oldValue ?? newValue);
+				return await val.Value;
+			}
+			catch
+			{
+				// Handle cached lazy exception by evicting from cache. Thanks to Denis Borovnev for pointing this out!
+				_Cache.Remove(key: url);
+				throw;
+			}
 		}
 
 		/// <summary>

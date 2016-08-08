@@ -1,7 +1,10 @@
 ## Ucsb.Sa.Enterprise.ClientExtensions
 
-This adds fucntionality for managing multiple client connections within
-a config file. It also adds tracing for outgoing calls.
+Adds some functionality around HttpClient:
+
+* Basic parsing of json to objects (Newtonsoft.JSON)
+* Outgoing call tracing
+* Response caching
 
 ### Client Configurations
 
@@ -82,3 +85,36 @@ using(var client = HttpClientSaManager.NewClient("placeholder"))
 	var response = client.Get<JsonPlaceholder>();
 }
 ```
+
+
+### Response Caching
+
+Sometimes you have calls which essentially load lookup tables. These tables are fine to cache
+for a limited amount of time, without a need for them to always be insync with the original
+datasource.
+
+This can be accomplished with:
+
+```csharp
+HttpClientSaManager.Add("placeholder", "http://jsonplaceholder.typicode.com/posts");
+
+using(var client = HttpClientSaManager.NewClient("placeholder"))
+{
+	var response = client.GetCached<List<JsonPlaceholder>>();
+}
+```
+
+Or async ...
+
+```csharp
+HttpClientSaManager.Add("placeholder", "http://jsonplaceholder.typicode.com/posts");
+
+using(var client = HttpClientSaManager.NewClient("placeholder"))
+{
+	var response = await client.GetCachedAsync<List<JsonPlaceholder>>();
+}
+```
+
+The default eviction time on the cache is 6 hours, but can be overridden with the parameter ```policy```.
+
+ 

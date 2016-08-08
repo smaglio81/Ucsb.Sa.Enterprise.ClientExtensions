@@ -7,6 +7,7 @@ using Microsoft.VisualStudio.TestTools.UnitTesting;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using System.ComponentModel.DataAnnotations;
+using System.Diagnostics;
 
 namespace Ucsb.Sa.Enterprise.ClientExtensions.Tests
 {
@@ -26,6 +27,84 @@ namespace Ucsb.Sa.Enterprise.ClientExtensions.Tests
 					"\n  \"body\": \"quia et suscipit\\nsuscipit recusandae consequuntur expedita et cum\\nreprehenderit molestiae ut ut quas totam\\nnostrum rerum est autem sunt rem eveniet architecto\"\n}",
 					response
 				);
+			}
+		}
+
+		[TestMethod]
+		public void GetCached()
+		{
+			using (var client = new HttpClientSa())
+			{
+				var warmup = client.Get("http://jsonplaceholder.typicode.com/posts/1");	// prime client, but don't care about result
+
+				var uncached = new Stopwatch();
+				try
+				{
+					uncached.Start();
+
+					var response = client.GetCached<List<JsonPlaceholder>>("http://jsonplaceholder.typicode.com/posts");
+
+					Assert.IsTrue(response[0] is JsonPlaceholder);
+				}
+				finally
+				{
+					uncached.Stop();
+				}
+
+				var cached = new Stopwatch();
+				try
+				{
+					cached.Start();
+
+					var response = client.GetCached<List<JsonPlaceholder>>("http://jsonplaceholder.typicode.com/posts");
+
+					Assert.IsTrue(response[0] is JsonPlaceholder);
+				}
+				finally
+				{
+					cached.Stop();
+				}
+
+				Assert.IsTrue(uncached.ElapsedTicks > cached.ElapsedTicks);
+			}
+		}
+
+		[TestMethod]
+		public void GetCachedAsync()
+		{
+			using (var client = new HttpClientSa())
+			{
+				var warmup = client.Get("http://jsonplaceholder.typicode.com/posts/1"); // prime client, but don't care about result
+
+				var uncached = new Stopwatch();
+				try
+				{
+					uncached.Start();
+
+					var task = client.GetCachedAsync<List<JsonPlaceholder>>("http://jsonplaceholder.typicode.com/posts");
+
+					Assert.IsTrue(task.Result[0] is JsonPlaceholder);
+				}
+				finally
+				{
+					uncached.Stop();
+				}
+
+				var cached = new Stopwatch();
+				try
+				{
+					cached.Start();
+
+					var task = client.GetCachedAsync<List<JsonPlaceholder>>("http://jsonplaceholder.typicode.com/posts");
+
+					Assert.IsTrue(task.Result[0] is JsonPlaceholder);
+				}
+				finally
+				{
+					cached.Stop();
+				}
+
+				Assert.IsTrue(uncached.ElapsedTicks > cached.ElapsedTicks);
 			}
 		}
 
