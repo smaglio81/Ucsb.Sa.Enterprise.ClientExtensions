@@ -9,6 +9,7 @@ using System.Runtime.CompilerServices;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
+using System.Transactions;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Serialization;
 using Ucsb.Sa.Enterprise.ClientExtensions.Data;
@@ -100,6 +101,13 @@ namespace Ucsb.Sa.Enterprise.ClientExtensions
 			set { _JsonNetSerializerSettings = value; }
 		}
 
+		/// <summary>
+		/// This will configure the HttpClientSa client to ignore adding implicit
+		/// MS DTC transactions identifiers to request headers.
+		/// (Default is false)
+		/// </summary>
+		public bool IgnoreImplicitTransactions { get; set; }
+
 		#endregion
 
 		#region constructors
@@ -110,6 +118,7 @@ namespace Ucsb.Sa.Enterprise.ClientExtensions
 		public HttpClientSa()
 		{
 			RequestHeaders = new Dictionary<string, string>();
+			IgnoreImplicitTransactions = false;
 		}
 
 		/// <summary>
@@ -194,9 +203,9 @@ namespace Ucsb.Sa.Enterprise.ClientExtensions
 		/// <param name="url">The URL.</param>
 		/// <param name="datatype">The datatype of the expected result.</param>
 		/// <returns>The string body of the returned result.</returns>
-		public string Get(string url = "", string datatype = "json")
+		public string Get(string url = "", string datatype = "json", Transaction transaction = null)
 		{
-			return GetAsyncAsString(url, datatype).Result;
+			return GetAsyncAsString(url, datatype, transaction).Result;
 		}
 
 		/// /// <summary>
@@ -206,10 +215,10 @@ namespace Ucsb.Sa.Enterprise.ClientExtensions
 		/// <param name="url">The URL.</param>
 		/// <param name="datatype">The datatype of the expected result.</param>
 		/// <returns>The string body of the returned result.</returns>
-		public T Get<T>(string url = "", string datatype = "json")
+		public T Get<T>(string url = "", string datatype = "json", Transaction transaction = null)
 		{
-			return GetAsync<T>(url, datatype).Result;
-        }
+			return GetAsync<T>(url, datatype, transaction).Result;
+		}
 
 		/// <summary>
 		/// Gets the data object at the specified URL.
@@ -217,9 +226,9 @@ namespace Ucsb.Sa.Enterprise.ClientExtensions
 		/// <param name="url">The URL.</param>
 		/// <param name="datatype">The datatype of the expected result.</param>
 		/// <returns>The string body of the returned result.</returns>
-		public async Task<string> GetAsyncAsString(string url = "", string datatype = "json")
+		public async Task<string> GetAsyncAsString(string url = "", string datatype = "json", Transaction transaction = null)
 		{
-			var response = await Execute(url, HttpMethod.Get, null, datatype);
+			var response = await Execute(url, HttpMethod.Get, null, datatype, transaction);
 			var content = response.ResponseAsString();
 			return content;
 		}
@@ -231,9 +240,9 @@ namespace Ucsb.Sa.Enterprise.ClientExtensions
 		/// <param name="url">The URL.</param>
 		/// <param name="datatype">The datatype of the expected result.</param>
 		/// <returns>The string body of the returned result.</returns>
-		public async Task<T> GetAsync<T>(string url = "", string datatype = "json")
+		public async Task<T> GetAsync<T>(string url = "", string datatype = "json", Transaction transaction = null)
 		{
-			var response = await Execute(url, HttpMethod.Get, null, datatype);
+			var response = await Execute(url, HttpMethod.Get, null, datatype, transaction);
 			if (!response.IsSuccessStatusCode) { return default(T); }
 
 			var content = response.ResponseAsString();
@@ -326,9 +335,9 @@ namespace Ucsb.Sa.Enterprise.ClientExtensions
 		/// <param name="data">The data to send in the body of the request.</param>
 		/// <param name="datatype">The datatype of the expected result.</param>
 		/// <returns></returns>
-		public string Post(string url = "", object data = null, string datatype = "json")
+		public string Post(string url = "", object data = null, string datatype = "json", Transaction transaction = null)
 		{
-			return PostAsyncAsString(url, data, datatype).Result;
+			return PostAsyncAsString(url, data, datatype, transaction).Result;
 		}
 
 		/// <summary>
@@ -339,10 +348,10 @@ namespace Ucsb.Sa.Enterprise.ClientExtensions
 		/// <param name="data">The data to send in the body of the request.</param>
 		/// <param name="datatype">The datatype of the expected result.</param>
 		/// <returns></returns>
-		public T Post<T>(string url = "", object data = null, string datatype = "json")
+		public T Post<T>(string url = "", object data = null, string datatype = "json", Transaction transaction = null)
 		{
-			return PostAsync<T>(url, data, datatype).Result;
-        }
+			return PostAsync<T>(url, data, datatype, transaction).Result;
+		}
 
 		/// <summary>
 		/// Posts the data object to the specified URL. This is like an Update. It's easy to
@@ -355,9 +364,9 @@ namespace Ucsb.Sa.Enterprise.ClientExtensions
 		/// <param name="data">The data to send in the body of the request.</param>
 		/// <param name="datatype">The datatype of the expected result.</param>
 		/// <returns></returns>
-		public async Task<string> PostAsyncAsString(string url = "", object data = null, string datatype = "json")
+		public async Task<string> PostAsyncAsString(string url = "", object data = null, string datatype = "json", Transaction transaction = null)
 		{
-			var response = await Execute(url, HttpMethod.Post, data, datatype);
+			var response = await Execute(url, HttpMethod.Post, data, datatype, transaction);
 			var content = response.ResponseAsString();
 			return content;
 		}
@@ -370,9 +379,9 @@ namespace Ucsb.Sa.Enterprise.ClientExtensions
 		/// <param name="data">The data to send in the body of the request.</param>
 		/// <param name="datatype">The datatype of the expected result.</param>
 		/// <returns></returns>
-		public async Task<T> PostAsync<T>(string url = "", object data = null, string datatype = "json")
+		public async Task<T> PostAsync<T>(string url = "", object data = null, string datatype = "json", Transaction transaction = null)
 		{
-			var response = await Execute(url, HttpMethod.Post, data, datatype);
+			var response = await Execute(url, HttpMethod.Post, data, datatype, transaction);
 			if (!response.IsSuccessStatusCode) { return default(T); }
 
 			var content = response.ResponseAsString();
@@ -388,9 +397,9 @@ namespace Ucsb.Sa.Enterprise.ClientExtensions
 		/// <param name="data">The data to send in the body of the request.</param>
 		/// <param name="datatype">The datatype of the expected result.</param>
 		/// <returns></returns>
-		public string Put(string url = "", object data = null, string datatype = "json")
+		public string Put(string url = "", object data = null, string datatype = "json", Transaction transaction = null)
 		{
-			return PutAsyncAsString(url, data, datatype).Result;
+			return PutAsyncAsString(url, data, datatype, transaction).Result;
 		}
 
 		/// <summary>
@@ -403,10 +412,10 @@ namespace Ucsb.Sa.Enterprise.ClientExtensions
 		/// <param name="data">The data to send in the body of the request.</param>
 		/// <param name="datatype">The datatype of the expected result.</param>
 		/// <returns></returns>
-		public T Put<T>(string url = "", object data = null, string datatype = "json")
+		public T Put<T>(string url = "", object data = null, string datatype = "json", Transaction transaction = null)
 		{
-			return PutAsync<T>(url, data, datatype).Result;
-        }
+			return PutAsync<T>(url, data, datatype, transaction).Result;
+		}
 
 		/// <summary>
 		/// Puts the data object at the specified URL.This is like an Insert. But, can be used
@@ -417,9 +426,9 @@ namespace Ucsb.Sa.Enterprise.ClientExtensions
 		/// <param name="data">The data to send in the body of the request.</param>
 		/// <param name="datatype">The datatype of the expected result.</param>
 		/// <returns></returns>
-		public async Task<string> PutAsyncAsString(string url = "", object data = null, string datatype = "json")
+		public async Task<string> PutAsyncAsString(string url = "", object data = null, string datatype = "json", Transaction transaction = null)
 		{
-			var response = await Execute(url, HttpMethod.Put, data, datatype);
+			var response = await Execute(url, HttpMethod.Put, data, datatype, transaction);
 			var content = response.ResponseAsString();
 			return content;
 		}
@@ -434,9 +443,9 @@ namespace Ucsb.Sa.Enterprise.ClientExtensions
 		/// <param name="data">The data to send in the body of the request.</param>
 		/// <param name="datatype">The datatype of the expected result.</param>
 		/// <returns></returns>
-		public async Task<T> PutAsync<T>(string url = "", object data = null, string datatype = "json")
+		public async Task<T> PutAsync<T>(string url = "", object data = null, string datatype = "json", Transaction transaction = null)
 		{
-			var response = await Execute(url, HttpMethod.Put, data, datatype);
+			var response = await Execute(url, HttpMethod.Put, data, datatype, transaction);
 			if (!response.IsSuccessStatusCode) { return default(T); }
 
 			var content = response.ResponseAsString();
@@ -449,9 +458,9 @@ namespace Ucsb.Sa.Enterprise.ClientExtensions
 		/// <param name="url">The URL.</param>
 		/// <param name="datatype">The datatype of the expected result.</param>
 		/// <returns></returns>
-		public string Delete(string url = "", string datatype = "json")
+		public string Delete(string url = "", string datatype = "json", Transaction transaction = null)
 		{
-			return DeleteAsyncAsString(url, datatype).Result;
+			return DeleteAsyncAsString(url, datatype, transaction).Result;
 		}
 
 		/// <summary>
@@ -461,9 +470,9 @@ namespace Ucsb.Sa.Enterprise.ClientExtensions
 		/// <param name="url">The URL.</param>
 		/// <param name="datatype">The datatype of the expected result.</param>
 		/// <returns></returns>
-		public T Delete<T>(string url = "", string datatype = "json")
+		public T Delete<T>(string url = "", string datatype = "json", Transaction transaction = null)
 		{
-			return DeleteAsync<T>(url, datatype).Result;
+			return DeleteAsync<T>(url, datatype, transaction).Result;
 		}
 
 		/// <summary>
@@ -472,9 +481,9 @@ namespace Ucsb.Sa.Enterprise.ClientExtensions
 		/// <param name="url">The URL.</param>
 		/// <param name="datatype">The datatype of the expected result.</param>
 		/// <returns></returns>
-		public async Task<string> DeleteAsyncAsString(string url = "", string datatype = "json")
+		public async Task<string> DeleteAsyncAsString(string url = "", string datatype = "json", Transaction transaction = null)
 		{
-			var response = await Execute(url, HttpMethod.Delete, null, datatype);
+			var response = await Execute(url, HttpMethod.Delete, null, datatype, transaction);
 			var content = response.ResponseAsString();
 			return content;
 		}
@@ -486,9 +495,9 @@ namespace Ucsb.Sa.Enterprise.ClientExtensions
 		/// <param name="url">The URL.</param>
 		/// <param name="datatype">The datatype of the expected result.</param>
 		/// <returns></returns>
-		public async Task<T> DeleteAsync<T>(string url = "", string datatype = "json")
+		public async Task<T> DeleteAsync<T>(string url = "", string datatype = "json", Transaction transaction = null)
 		{
-			var response = await Execute(url, HttpMethod.Delete, null, datatype);
+			var response = await Execute(url, HttpMethod.Delete, null, datatype, transaction);
 			if (!response.IsSuccessStatusCode) { return default(T); }
 
 			var content = response.ResponseAsString();
@@ -599,35 +608,36 @@ namespace Ucsb.Sa.Enterprise.ClientExtensions
 
 		
 
-        public virtual async Task<HttpResponseMessage> Execute(
-			string url, HttpMethod method, object data, string datatype = "json")
+		public virtual async Task<HttpResponseMessage> Execute(
+			string url, HttpMethod method, object data, string datatype = "json", Transaction transaction = null)
 		{
 			ConfigureRequestHeaders(datatype);
+
+			HttpRequestMessage request = new HttpRequestMessage(method, url);
+
+			if (IgnoreImplicitTransactions == false)
+			{
+				request.AddTransactionPropagationToken();
+			}
 
 			HttpResponseMessage response;
 			HttpContent httpContent = null;
 			DateTime requestTime = DateTime.Now;
 
-            switch (method.Method)
-            {
-                case HttpVerbSa.Get:
-					response = await base.GetAsync(url);
-                    break;
-                case HttpVerbSa.Put:
-                    httpContent = GetHttpContent(data, datatype);
-					response = await base.PutAsync(url, httpContent);
-                    break;
-                case HttpVerbSa.Post:
-                    httpContent = GetHttpContent(data, datatype);
-					response = await base.PostAsync(url, httpContent);
-                    break;
-                case HttpVerbSa.Delete:
-					response = await base.DeleteAsync(url);
-                    break;
-                default:
-                    throw new ArgumentException(String.Format("'{0}' is not a supported HTTP Verb", method.Method), "method");
+			switch (method.Method)
+			{
+				case "PUT":
+				case "POST":
+					httpContent = GetHttpContent(data, datatype);
+					request.Content = httpContent;
+					response = await base.SendAsync(request);
+					break;
+					
+				default:
+					response = await base.SendAsync(request);
+					break;
 
-            }
+			}
 			DateTime responseTime = DateTime.Now;
 			LastHttpResponseMessage = response;
 
@@ -641,79 +651,79 @@ namespace Ucsb.Sa.Enterprise.ClientExtensions
 			return response;
 		}
 
-        /// <summary>
+		/// <summary>
 		/// Save the call information to the trace tables. This will save the call in a background
-        /// thread. So, if the application closes exits too quickly or an exception occurs nothing
-        /// will be written to the database.
+		/// thread. So, if the application closes exits too quickly or an exception occurs nothing
+		/// will be written to the database.
 		/// </summary>
 		/// <param name="response">Http Response</param>
 		/// <param name="requestDateTime">Request Date time </param>
 		/// <param name="responseDateTime">Response Datetime</param>
-        /// <param name="postDbLogged">A callback for after the call has been logged to the database</param>
-        /// <param name="data">The payload that gets encoded into the request</param>
-        /// <param name="datatype">The datatype of the encoding (ie. json, etc).</param>
-        public void SaveCall(
-            HttpResponseMessage response,
-            DateTime requestDateTime,
-            DateTime responseDateTime,
-            object data,
-            string datatype = "json",
-            Action<HttpCall> postDbLogged = null
-        )
-        {
-            var call = CreateCall(response, requestDateTime, responseDateTime, data, datatype);
-            SaveCall(call, postDbLogged);
-        }
+		/// <param name="postDbLogged">A callback for after the call has been logged to the database</param>
+		/// <param name="data">The payload that gets encoded into the request</param>
+		/// <param name="datatype">The datatype of the encoding (ie. json, etc).</param>
+		public void SaveCall(
+			HttpResponseMessage response,
+			DateTime requestDateTime,
+			DateTime responseDateTime,
+			object data,
+			string datatype = "json",
+			Action<HttpCall> postDbLogged = null
+		)
+		{
+			var call = CreateCall(response, requestDateTime, responseDateTime, data, datatype);
+			SaveCall(call, postDbLogged);
+		}
 
-        /// <summary>
+		/// <summary>
 		/// Save the call information to the trace tables. This will save the call in a background
-        /// thread. So, if the application closes exits too quickly or an exception occurs nothing
-        /// will be written to the database.
+		/// thread. So, if the application closes exits too quickly or an exception occurs nothing
+		/// will be written to the database.
 		/// </summary>
 		/// <param name="httpCall">Http Call Object for Tracing</param>
 		/// <param name="postDbLogged">A callback for after the call has been logged to the database</param>
-        public void SaveCall(
-            HttpCall call,
-            Action<HttpCall> postDbLogged
-        )
-        {
-            var args = new SaveCallArgs() { Call = call, PostDbLogged = postDbLogged };
-            ThreadPool.QueueUserWorkItem(SaveCall, args);
-        }
+		public void SaveCall(
+			HttpCall call,
+			Action<HttpCall> postDbLogged
+		)
+		{
+			var args = new SaveCallArgs() { Call = call, PostDbLogged = postDbLogged };
+			ThreadPool.QueueUserWorkItem(SaveCall, args);
+		}
 
-        /// <summary>
-        /// Create the Call object which can be saved to the tracing tables. This will
-        /// not save. Use SaveCall to create the object and save.
-        /// </summary>
-        /// <param name="response">Http Response</param>
-        /// <param name="requestDateTime">Request Date time </param>
-        /// <param name="responseDateTime">Response Datetime</param>
-        /// <param name="data">The payload that gets encoded into the request</param>
-        /// <param name="datatype">The datatype of the encoding (ie. json, etc).</param>
-        public HttpCall CreateCall(
+		/// <summary>
+		/// Create the Call object which can be saved to the tracing tables. This will
+		/// not save. Use SaveCall to create the object and save.
+		/// </summary>
+		/// <param name="response">Http Response</param>
+		/// <param name="requestDateTime">Request Date time </param>
+		/// <param name="responseDateTime">Response Datetime</param>
+		/// <param name="data">The payload that gets encoded into the request</param>
+		/// <param name="datatype">The datatype of the encoding (ie. json, etc).</param>
+		public HttpCall CreateCall(
 			HttpResponseMessage response,
-            DateTime requestDateTime,
-            DateTime responseDateTime,
-            object data,
-            string datatype = "json"
+			DateTime requestDateTime,
+			DateTime responseDateTime,
+			object data,
+			string datatype = "json"
 		)
 		{
 			HttpCall call = new HttpCall();
 
 			// request info
-            if(response.RequestMessage.Content != null)
-            {
-                var newContent = GetHttpContent(data, datatype);
-                call.RequestBody = newContent.ReadAsStringAsync().Result;
-            }
+			if(response.RequestMessage.Content != null)
+			{
+				var newContent = GetHttpContent(data, datatype);
+				call.RequestBody = newContent.ReadAsStringAsync().Result;
+			}
 			call.Method = response.RequestMessage.Method.Method;
 			call.Server = Environment.MachineName;
 			call.RequestDate = responseDateTime;
 
-            //	if the requestUri has the schema in it (http://) then only the request uri should
-            //	be recorded. The HttpClient object will ignore the BaseAddress if the full url path
-            //	is given in the requestUri.
-            call.Uri = response.RequestMessage.RequestUri.AbsoluteUri;
+			//	if the requestUri has the schema in it (http://) then only the request uri should
+			//	be recorded. The HttpClient object will ignore the BaseAddress if the full url path
+			//	is given in the requestUri.
+			call.Uri = response.RequestMessage.RequestUri.AbsoluteUri;
 			
 			// request header 
 			string headers = string.Empty;
@@ -763,34 +773,34 @@ namespace Ucsb.Sa.Enterprise.ClientExtensions
 		/// <param name="state">Call Log object</param>
 		internal static void SaveCall(object state)
 		{
-            try
-            {
-                var args = state as SaveCallArgs;
-                var call = args.Call;
-                var uri = new Uri(call.Uri);
-                var addresses = System.Net.Dns.GetHostAddresses(uri.Host);
-                if (addresses.Any()) { call.IP = addresses[0].ToString(); }
+			try
+			{
+				var args = state as SaveCallArgs;
+				var call = args.Call;
+				var uri = new Uri(call.Uri);
+				var addresses = System.Net.Dns.GetHostAddresses(uri.Host);
+				if (addresses.Any()) { call.IP = addresses[0].ToString(); }
 
-                // store in instumentation database 
-                using (var db = new InstrumentationDbContext())
-                {
-                    db.Calls.Add(call);
-                    db.SaveChanges();
-                }
+				// store in instumentation database 
+				using (var db = new InstrumentationDbContext())
+				{
+					db.Calls.Add(call);
+					db.SaveChanges();
+				}
 
-                if (args.PostDbLogged != null)
-                {
-                    args.PostDbLogged(call);
-                }
-            } catch
-            {
-                /*
-                    MAGLIO-S - 2016-03-05: After discussion with Nikhil, Aruelien, and Seth
-                    it was decided to swallow all exception that occur while
-                    saving on the background thread. The end user is unable
-                    to catch these exceptions and they cause w3wp.exe to crash.
-                */
-            }
+				if (args.PostDbLogged != null)
+				{
+					args.PostDbLogged(call);
+				}
+			} catch
+			{
+				/*
+					MAGLIO-S - 2016-03-05: After discussion with Nikhil, Aurelien, and Seth
+					it was decided to swallow all exceptions that occur while
+					saving on the background thread. The end user is unable
+					to catch these exceptions and they cause w3wp.exe to crash.
+				*/
+			}
 			
 		}
 

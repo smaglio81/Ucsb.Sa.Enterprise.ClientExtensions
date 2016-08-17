@@ -81,48 +81,48 @@ namespace Ucsb.Sa.Enterprise.ClientExtensions.Configuration
 			set { this["baseAddress"] = value; }
 		}
 
-        /// <summary>
+		/// <summary>
 		/// Defines the name of the default handler to use if
 		/// <see cref="HttpClientSaManager.NewClient()" /> is invoked with
 		/// no value or an empty string.
 		/// </summary>
 		public HttpClientSaTraceLevel TraceLevel
-        {
-            get
-            {
-                return HttpClientSaTraceLevelParser.Parse(TraceLevelString);
-            }
-        }
+		{
+			get
+			{
+				return HttpClientSaTraceLevelParser.Parse(TraceLevelString);
+			}
+		}
 
-        [ConfigurationProperty("traceLevel", DefaultValue = "")]
-        private string TraceLevelString
-        {
-            get { return (string)this["traceLevel"]; }
-            set { this["traceLevel"] = value; }
-        }
+		[ConfigurationProperty("traceLevel", DefaultValue = "")]
+		private string TraceLevelString
+		{
+			get { return (string)this["traceLevel"]; }
+			set { this["traceLevel"] = value; }
+		}
 
-        /// <summary>
+		/// <summary>
 		/// Determines if the client will be made as a singleton. A singleton
-        /// will keep a persistent connection with the server between calls. This
-        /// can be used to allow for multiple calls to be run against a single server.
-        /// (If the server supports it)
+		/// will keep a persistent connection with the server between calls. This
+		/// can be used to allow for multiple calls to be run against a single server.
+		/// (If the server supports it)
 		/// </summary>
 		public bool IsSingleton
-        {
-            get
-            {
-                bool singleton = true;
-                bool.TryParse(SingletonString, out singleton);
-                return singleton;
-            }
-        }
+		{
+			get
+			{
+				bool singleton = true;
+				bool.TryParse(SingletonString, out singleton);
+				return singleton;
+			}
+		}
 
-        [ConfigurationProperty("singleton", DefaultValue = "true")]
-        private string SingletonString
-        {
-            get { return (string)this["singleton"]; }
-            set { this["singleton"] = value; }
-        }
+		[ConfigurationProperty("singleton", DefaultValue = "true")]
+		private string SingletonString
+		{
+			get { return (string)this["singleton"]; }
+			set { this["singleton"] = value; }
+		}
 
 		/// <summary>
 		/// This will configure the HttpClientSa client to convert .NET's
@@ -145,6 +145,28 @@ namespace Ucsb.Sa.Enterprise.ClientExtensions.Configuration
 		{
 			get { return (string)this["serializeToCamelCase"]; }
 			set { this["serializeToCamelCase"] = value; }
+		}
+
+		/// <summary>
+		/// This will configure the HttpClientSa client to ignore adding implicit
+		/// MS DTC transactions identifiers to request headers.
+		/// (Default is false)
+		/// </summary>
+		public bool IgnoreImplicitTransactions
+		{
+			get
+			{
+				bool ignoreImplicitTransactions = false;
+				bool.TryParse(IgnoreImplicitTransactionsString, out ignoreImplicitTransactions);
+				return ignoreImplicitTransactions;
+			}
+		}
+
+		[ConfigurationProperty("ignoreImplicitTransactions", DefaultValue = "false")]
+		private string IgnoreImplicitTransactionsString
+		{
+			get { return (string)this["ignoreImplicitTransactions"]; }
+			set { this["ignoreImplicitTransactions"] = value; }
 		}
 
 		/// <summary>

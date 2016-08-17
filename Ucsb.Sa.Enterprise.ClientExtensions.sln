@@ -33,4 +33,16 @@ Global
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
 	EndGlobalSection
+	GlobalSection(TeamFoundationVersionControl) = preSolution
+		SccNumberOfProjects = 3
+		SccEnterpriseProvider = {4CA58AB2-18FA-4F8D-95D4-32DDF27D184C}
+		SccTeamFoundationServer = http://tfs.sa.ucsb.edu/tfs/sist
+		SccProjectUniqueName0 = Ucsb.Sa.Enterprise.ClientExtensions\\Ucsb.Sa.Enterprise.ClientExtensions.csproj
+		SccProjectName0 = Ucsb.Sa.Enterprise.ClientExtensions
+		SccLocalPath0 = Ucsb.Sa.Enterprise.ClientExtensions
+		SccProjectUniqueName1 = Ucsb.Sa.Enterprise.ClientExtensions.Tests\\Ucsb.Sa.Enterprise.ClientExtensions.Tests.csproj
+		SccProjectName1 = Ucsb.Sa.Enterprise.ClientExtensions.Tests
+		SccLocalPath1 = Ucsb.Sa.Enterprise.ClientExtensions.Tests
+		SccLocalPath2 = .
+	EndGlobalSection
 EndGlobal

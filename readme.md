@@ -5,6 +5,8 @@ Adds some functionality around HttpClient:
 * Basic parsing of json to objects (Newtonsoft.JSON)
 * Outgoing call tracing
 * Response caching
+* Implicit MS DTC Transaction Passing
+
 
 ### Client Configurations
 
@@ -14,16 +16,16 @@ file.
 
 ```xml
   <configSections>
-    <section name="clientExtensions" type="Ucsb.Sa.Enterprise.ClientExtensions.Configuration.ClientExtensionsConfigurationSection,Ucsb.Sa.Enterprise.ClientExtensions" />
+	<section name="clientExtensions" type="Ucsb.Sa.Enterprise.ClientExtensions.Configuration.ClientExtensionsConfigurationSection,Ucsb.Sa.Enterprise.ClientExtensions" />
   </configSections>
 
   <clientExtensions>
-    <httpClients>
-      <httpClient name="p1" baseAddress="http://jsonplaceholder.typicode.com" traceLevel="All|None" />
-      <httpClient name="h1">
-        <header name="n1" value="v1" />
-      </httpClient>
-    </httpClients>
+	<httpClients>
+	  <httpClient name="p1" baseAddress="http://jsonplaceholder.typicode.com" traceLevel="All|None" />
+	  <httpClient name="h1">
+		<header name="n1" value="v1" />
+	  </httpClient>
+	</httpClients>
   </clientExtensions>
 ```
 
@@ -62,13 +64,13 @@ The tracing will record both the request and response.
 
 ```xml
   <configSections>
-    <section name="clientExtensions" type="Ucsb.Sa.Enterprise.ClientExtensions.Configuration.ClientExtensionsConfigurationSection,Ucsb.Sa.Enterprise.ClientExtensions" />
+	<section name="clientExtensions" type="Ucsb.Sa.Enterprise.ClientExtensions.Configuration.ClientExtensionsConfigurationSection,Ucsb.Sa.Enterprise.ClientExtensions" />
   </configSections>
 
   <clientExtensions>
-    <httpClients>
-      <httpClient name="p1" baseAddress="http://jsonplaceholder.typicode.com" traceLevel="All|None" />
-    </httpClients>
+	<httpClients>
+	  <httpClient name="p1" baseAddress="http://jsonplaceholder.typicode.com" traceLevel="All|None" />
+	</httpClients>
   </clientExtensions>
 ```
 
@@ -117,4 +119,49 @@ using(var client = HttpClientSaManager.NewClient("placeholder"))
 
 The default eviction time on the cache is 6 hours, but can be overridden with the parameter ```policy```.
 
- 
+
+
+### Implicit MS DTC Transaction Passing
+
+This adds Transaction Id passing for MS DTC transaction outlined in this article
+[https://code.msdn.microsoft.com/Distributed-Transactions-c7e0a8c2](https://code.msdn.microsoft.com/Distributed-Transactions-c7e0a8c2).
+
+To pass across a MS DTC Transaction Id, the code must be wrapped in a ```TransactionScope```:
+```csharp
+using (var scope = new TransactionScope())
+{
+	using (var client = new HttpClientSa("http://mvcextensions.local.sa.ucsb.edu/api/transaction"))
+	{
+		var result = client.Get();	// will implicitly add transaction id
+		Assert.IsTrue(!string.IsNullOrEmpty(result));
+	}
+
+	scope.Complete();
+}
+```
+
+To use the transaction on the other side, you will need to implement the
+```ActionFilterAttribute``` described in the article.
+
+You can mark a ```HttpClientSa``` to ignore transactions using the
+```IgnoreImplicitTransactions``` attribute on the class or
+```HttpClientSaConfiguration```  class within the Manager. The default value
+of ```false``` will allow for transactions to be implicitly added.
+
+```csharp
+using (var scope = new TransactionScope())
+{
+	using (var client = new HttpClientSa("http://mvcextensions.local.sa.ucsb.edu/api/transaction"))
+	{
+		client.IgnoreImplicitTransactions = true;
+		var result = client.Get();	// transaction will be ignored
+		Assert.IsTrue(!string.IsNullOrEmpty(result));
+	}
+
+	...
+
+	scope.Complete();
+}
+```
+
+

@@ -22,6 +22,7 @@ namespace Ucsb.Sa.Enterprise.ClientExtensions
 		{
 			Headers = new Dictionary<string, string>();
 			SerializeToCamelCase = true;
+			IgnoreImplicitTransactions = false;
 		}
 
 		/// <summary>
@@ -34,16 +35,16 @@ namespace Ucsb.Sa.Enterprise.ClientExtensions
 		/// </summary>
 		public string BaseAddress { get; set; }
 
-        /// <summary>
-        /// The trace level for this client.
-        /// </summary>
-        public HttpClientSaTraceLevel TraceLevel { get; set; }
+		/// <summary>
+		/// The trace level for this client.
+		/// </summary>
+		public HttpClientSaTraceLevel TraceLevel { get; set; }
 
-        /// <summary>
+		/// <summary>
 		/// Determines if the client will be made as a singleton. A singleton
-        /// will keep a persistent connection with the server between calls. This
-        /// can be used to allow for multiple calls to be run against a single server.
-        /// (If the server supports it)
+		/// will keep a persistent connection with the server between calls. This
+		/// can be used to allow for multiple calls to be run against a single server.
+		/// (If the server supports it)
 		/// </summary>
 		public bool IsSingleton { get; set; }
 
@@ -53,6 +54,13 @@ namespace Ucsb.Sa.Enterprise.ClientExtensions
 		/// FirstName --> firstName
 		/// </summary>
 		public bool SerializeToCamelCase { get; set; }
+
+		/// <summary>
+		/// This will configure the HttpClientSa client to ignore adding implicit
+		/// MS DTC transactions identifiers to request headers.
+		/// (Default is false)
+		/// </summary>
+		public bool IgnoreImplicitTransactions { get; set; }
 
 		/// <summary>
 		/// Gets or sets the post database logged callback.

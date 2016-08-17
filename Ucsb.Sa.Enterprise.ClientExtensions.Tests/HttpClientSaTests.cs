@@ -7,7 +7,11 @@ using Microsoft.VisualStudio.TestTools.UnitTesting;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using System.ComponentModel.DataAnnotations;
+using System.Configuration;
+using System.Data.SqlClient;
 using System.Diagnostics;
+using System.EnterpriseServices;
+using System.Transactions;
 
 namespace Ucsb.Sa.Enterprise.ClientExtensions.Tests
 {
@@ -69,6 +73,22 @@ namespace Ucsb.Sa.Enterprise.ClientExtensions.Tests
 			}
 		}
 
+		//[TestMethod]
+		//public void GetTransaction()
+		//{
+		//	//	DEVELOPER: you need mvcextensions.local.sa.ucsb.edu setup from the MvcExtensions project to use this one.
+		//	using (var scope = new TransactionScope())
+		//	{
+		//		using (var client = new HttpClientSa("http://mvcextensions.local.sa.ucsb.edu/api/transaction"))
+		//		{
+		//			var result = client.Get();	// transaction will be added
+		//			Assert.IsTrue(!string.IsNullOrEmpty(result));
+		//		}
+
+		//		//scope.Complete(); // rollsback the transaction
+		//	}
+		//}
+
 		[TestMethod]
 		public void GetCachedAsync()
 		{
@@ -122,6 +142,19 @@ namespace Ucsb.Sa.Enterprise.ClientExtensions.Tests
 		}
 
 		[TestMethod]
+		public void GetTypedSubPath()
+		{
+			using (var client = new HttpClientSa("http://jsonplaceholder.typicode.com/posts"))
+			{
+				var response = client.Get<JsonPlaceholder>("posts/1");
+				Assert.AreEqual(1, response.userId);
+				Assert.AreEqual(1, response.id);
+				Assert.AreEqual("sunt aut facere repellat provident occaecati excepturi optio reprehenderit", response.title);
+				Assert.AreEqual("quia et suscipit\nsuscipit recusandae consequuntur expedita et cum\nreprehenderit molestiae ut ut quas totam\nnostrum rerum est autem sunt rem eveniet architecto", response.body);
+			}
+		}
+
+		[TestMethod]
 		public void Post()
 		{
 			using(var client = new HttpClientSa())
@@ -132,6 +165,16 @@ namespace Ucsb.Sa.Enterprise.ClientExtensions.Tests
 				};
 				var response = client.Post("http://jsonplaceholder.typicode.com/posts/", data);
 				Assert.IsNotNull(response);
+			}
+		}
+
+		[TestMethod]
+		public void GetWithNoTransaction()
+		{
+			using (var client = new HttpClientSa("http://mvcextensions.local.sa.ucsb.edu/api/transaction"))
+			{
+				var result = client.Get();
+				Assert.IsTrue(!string.IsNullOrEmpty(result));
 			}
 		}
 

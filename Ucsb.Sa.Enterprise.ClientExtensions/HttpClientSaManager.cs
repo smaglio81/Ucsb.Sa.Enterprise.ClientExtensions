@@ -17,10 +17,10 @@ namespace Ucsb.Sa.Enterprise.ClientExtensions
 		internal static readonly ConcurrentDictionary<string,HttpClientSaConfiguration> _Configs =
 			new ConcurrentDictionary<string, HttpClientSaConfiguration>();
 
-        internal static readonly ConcurrentDictionary<string, HttpClientSa> _Singletons =
-            new ConcurrentDictionary<string, HttpClientSa>();
+		internal static readonly ConcurrentDictionary<string, HttpClientSa> _Singletons =
+			new ConcurrentDictionary<string, HttpClientSa>();
 
-        internal static bool _ConfigLoaded = false;
+		internal static bool _ConfigLoaded = false;
 
 		#endregion
 
@@ -97,31 +97,38 @@ namespace Ucsb.Sa.Enterprise.ClientExtensions
 
 			var config = GetConfig(name);
 
-            //  pull from the singlton collection if the config is marked as a singleton. If it doesn't
-            //  exist in the collection then create a new one.
-            HttpClientSa client = null;
-            if (config.IsSingleton && !forceNewInstance)
-            {
-                if(_Singletons.ContainsKey(name))
-                {
-                    client = _Singletons[name];
-                } else
-                {
-	                client = new HttpClientSa();
+			//  pull from the singlton collection if the config is marked as a singleton. If it doesn't
+			//  exist in the collection then create a new one.
+			HttpClientSa client = null;
+			if (config.IsSingleton && !forceNewInstance)
+			{
+				if(_Singletons.ContainsKey(name))
+				{
+					client = _Singletons[name];
+				} else
+				{
+					client = new HttpClientSa();
 					ConfigureClient(client, config);
 
-                    _Singletons.TryAdd(name, client);
-                }
-            }
-            else
-            {
-	            client = new HttpClientSa();
+					_Singletons.TryAdd(name, client);
+				}
+			}
+			else
+			{
+				client = new HttpClientSa();
 				ConfigureClient(client, config);
-            }
+			}
 
 			return client;
 		}
 
+		/// <summary>
+		/// Configure an <see cref="HttpClientSa" /> <paramref name="client" /> with the given 
+		/// <see cref="HttpClientSaConfiguration" /> <paramref name="config" /> information. This should only
+		/// be used once when creating a new <see cref="HttpClientSa" /> object.
+		/// </summary>
+		/// <param name="client">The client to configure</param>
+		/// <param name="config">The configuration to apply</param>
 		public static void ConfigureClient(HttpClientSa client, HttpClientSaConfiguration config)
 		{
 			if (string.IsNullOrWhiteSpace(config.BaseAddress) == false)
@@ -132,6 +139,7 @@ namespace Ucsb.Sa.Enterprise.ClientExtensions
 			client.ConfigureHeaders();
 			client.TraceLevel = config.TraceLevel;
 			client.SerializeToCamelCase = config.SerializeToCamelCase;
+			client.IgnoreImplicitTransactions = config.IgnoreImplicitTransactions;
 			client.PostDbLogged = config.PostDbLogged;
 		}
 
@@ -142,15 +150,15 @@ namespace Ucsb.Sa.Enterprise.ClientExtensions
 		{
 			var section = ClientExtensionsConfigurationSection.Configuration;
 			var httpClients = section.HttpClients;
-            
-            //	set the default trace level (if supplied)
-            if (httpClients.TraceLevel != HttpClientSaTraceLevel.Undefined)
-            {
-                TraceLevel = httpClients.TraceLevel;
-            }
+			
+			//	set the default trace level (if supplied)
+			if (httpClients.TraceLevel != HttpClientSaTraceLevel.Undefined)
+			{
+				TraceLevel = httpClients.TraceLevel;
+			}
 
-            //	load the defined client endpoints
-            foreach (HttpClientConfigurationElement client in httpClients)
+			//	load the defined client endpoints
+			foreach (HttpClientConfigurationElement client in httpClients)
 			{
 				var headers = new Dictionary<string,string>();
 				foreach(HeaderConfigurationElement header in client.Headers)
@@ -163,14 +171,14 @@ namespace Ucsb.Sa.Enterprise.ClientExtensions
 					Name = client.Name,
 					BaseAddress = client.BaseAddress,
 					Headers = headers,
-                    IsSingleton = client.IsSingleton,
+					IsSingleton = client.IsSingleton,
 					SerializeToCamelCase = client.SerializeToCamelCase
 				};
 
-                if(client.TraceLevel != HttpClientSaTraceLevel.Undefined)
-                {
-                    config.TraceLevel = client.TraceLevel;
-                }
+				if(client.TraceLevel != HttpClientSaTraceLevel.Undefined)
+				{
+					config.TraceLevel = client.TraceLevel;
+				}
 
 				Add(config);
 			}
@@ -316,9 +324,9 @@ namespace Ucsb.Sa.Enterprise.ClientExtensions
 			if(_Configs.TryGetValue(config.Name, out found))
 			{
 				_Configs.TryUpdate(config.Name, config, found);
-                HttpClientSa client;
-                _Singletons.TryRemove(config.Name, out client);
-            }
+				HttpClientSa client;
+				_Singletons.TryRemove(config.Name, out client);
+			}
 
 			return config;
 		}
@@ -333,8 +341,8 @@ namespace Ucsb.Sa.Enterprise.ClientExtensions
 			ValidateName(name);
 			HttpClientSaConfiguration removed;
 			_Configs.TryRemove(name, out removed);
-            HttpClientSa client;
-            _Singletons.TryRemove(name, out client);
+			HttpClientSa client;
+			_Singletons.TryRemove(name, out client);
 			return removed;
 		}
 

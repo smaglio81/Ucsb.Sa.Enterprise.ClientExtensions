@@ -35,7 +35,7 @@ namespace Ucsb.Sa.Enterprise.ClientExtensions.Tests
 
 		public void AddUpdateAndUseCode()
 		{
-            HttpClientSaManager.Remove("placeholder");
+			HttpClientSaManager.Remove("placeholder");
 			HttpClientSaManager.Add("placeholder", "http://jsonplaceholder.typicode.com/posts/100");
 
 			using(var client = HttpClientSaManager.NewClient("placeholder"))
@@ -87,8 +87,8 @@ namespace Ucsb.Sa.Enterprise.ClientExtensions.Tests
 			var watch = new System.Threading.ManualResetEvent(false);
 			var signaled = false;
 
-            HttpClientSaManager.Remove("placeholder");
-            HttpClientSaManager.Add(
+			HttpClientSaManager.Remove("placeholder");
+			HttpClientSaManager.Add(
 				"placeholder",
 				"http://jsonplaceholder.typicode.com",
 				null,
@@ -124,8 +124,8 @@ namespace Ucsb.Sa.Enterprise.ClientExtensions.Tests
 		[TestMethod]
 		public void AddRemove()
 		{
-            HttpClientSaManager.Remove("placeholder");
-            HttpClientSaManager.Add("a", "http://jsonplaceholder.typicode.com");
+			HttpClientSaManager.Remove("placeholder");
+			HttpClientSaManager.Add("a", "http://jsonplaceholder.typicode.com");
 
 			var client = HttpClientSaManager.NewClient("a");
 
@@ -151,26 +151,26 @@ namespace Ucsb.Sa.Enterprise.ClientExtensions.Tests
 		[TestMethod]
 		public void UseConfigFile()
 		{
-            var watch = new System.Threading.ManualResetEvent(false);
-            var signaled = false;
+			var watch = new System.Threading.ManualResetEvent(false);
+			var signaled = false;
 
-            using (var client = HttpClientSaManager.NewClient("p1"))
+			using (var client = HttpClientSaManager.NewClient("p1"))
 			{
-                client.PostDbLogged = call => { signaled = true; watch.Set(); };
+				client.PostDbLogged = call => { signaled = true; watch.Set(); };
 
-                var response = client.Get<JsonPlaceholder>("/posts/100?qs=ignore");
+				var response = client.Get<JsonPlaceholder>("/posts/100?qs=ignore");
 				Assert.AreEqual(10, response.userId);
 				Assert.AreEqual(100, response.id);
 				Assert.AreEqual("at nam consequatur ea labore ea harum", response.title);
 				Assert.AreEqual("cupiditate quo est a modi nesciunt soluta\nipsa voluptas error itaque dicta in\nautem qui minus magnam et distinctio eum\naccusamus ratione error aut", response.body);
 
-                watch.WaitOne(20000);
+				watch.WaitOne(20000);
 
-                if (signaled == false)
-                {
-                    throw new Exception("The callback did not execute within 20 seconds.");
-                }
-            }
+				if (signaled == false)
+				{
+					throw new Exception("The callback did not execute within 20 seconds.");
+				}
+			}
 
 			using(var hclient = HttpClientSaManager.NewClient("h1"))
 			{
