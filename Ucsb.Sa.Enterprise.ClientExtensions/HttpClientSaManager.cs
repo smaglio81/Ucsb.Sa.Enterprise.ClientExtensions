@@ -60,10 +60,24 @@ namespace Ucsb.Sa.Enterprise.ClientExtensions
 		/// <returns>A new instance of <see cref="HttpClientSa" />.</returns>
 		/// <exception cref="Exception">HttpClientSaManager could not find a default name for client configurations.
 		/// Please ensure a default configuration and name are defined before usage.</exception>
+		[Obsolete("After Singleton instances became the default creation pattern the name NewClient became incorrent." +
+		          "This has been replace by the method Get().")]
 		public static HttpClientSa NewClient()
 		{
+			return Get();
+		}
+
+		/// <summary>
+		/// Creates a new instance of a HttpClientSa client. This object should be disposed after usage.
+		/// The new instance will use the default configuration.
+		/// </summary>
+		/// <returns>A new instance of <see cref="HttpClientSa" />.</returns>
+		/// <exception cref="Exception">HttpClientSaManager could not find a default name for client configurations.
+		/// Please ensure a default configuration and name are defined before usage.</exception>
+		public static HttpClientSa Get()
+		{
 			var name = GetDefaultName();
-			if(string.IsNullOrWhiteSpace(name))
+			if (string.IsNullOrWhiteSpace(name))
 			{
 				throw new Exception(
 					"HttpClientSaManager could not find a default name for client configurations. " +
@@ -71,7 +85,7 @@ namespace Ucsb.Sa.Enterprise.ClientExtensions
 				);
 			}
 
-			return NewClient(name);
+			return Get(name);
 		}
 
 		/// <summary>
@@ -85,7 +99,25 @@ namespace Ucsb.Sa.Enterprise.ClientExtensions
 		/// A client name must be given to lookup the HttpClientSaConfiguration. Please supply
 		/// a name and try again.</exception>
 		/// <exception cref="Exception">When configuration errors occur.</exception>
+		[Obsolete("After Singleton instances became the default creation pattern the name NewClient became incorrent." +
+				  "This has been replace by the method Get(string name, bool forceNewInstance = false).")]
 		public static HttpClientSa NewClient(string name, bool forceNewInstance = false)
+		{
+			return Get(name, forceNewInstance);
+		}
+
+		/// <summary>
+		/// Creates a new instance of a HttpClientSa client. This object should be disposed after usage.
+		/// </summary>
+		/// <param name="name">The unique name of the client to use.</param>
+		/// <param name="forceNewInstance">Even if the client is defined as a singleton,
+		/// this will for a new instance to be created.</param>
+		/// <returns>A new instance of <see cref="HttpClientSa" />.</returns>
+		/// <exception cref="ArgumentException">
+		/// A client name must be given to lookup the HttpClientSaConfiguration. Please supply
+		/// a name and try again.</exception>
+		/// <exception cref="Exception">When configuration errors occur.</exception>
+		public static HttpClientSa Get(string name, bool forceNewInstance = false)
 		{
 			if (string.IsNullOrWhiteSpace(name))
 			{

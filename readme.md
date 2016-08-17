@@ -15,31 +15,39 @@ amount of redudant configuration information within the source code. Header valu
 file.
 
 ```xml
-  <configSections>
+<configSections>
 	<section name="clientExtensions" type="Ucsb.Sa.Enterprise.ClientExtensions.Configuration.ClientExtensionsConfigurationSection,Ucsb.Sa.Enterprise.ClientExtensions" />
-  </configSections>
+</configSections>
 
-  <clientExtensions>
+<clientExtensions>
 	<httpClients>
-	  <httpClient name="p1" baseAddress="http://jsonplaceholder.typicode.com" traceLevel="All|None" />
-	  <httpClient name="h1">
-		<header name="n1" value="v1" />
-	  </httpClient>
+		<httpClient name="p1" baseAddress="http://jsonplaceholder.typicode.com" traceLevel="All|None" />
+		<httpClient name="h1">
+			<header name="n1" value="v1" />
+		</httpClient>
 	</httpClients>
-  </clientExtensions>
+</clientExtensions>
 ```
 
 This can be used with:
 ```csharp
+// allows for a singleton object to be created and maintained by HttpClientSaManager
+using (var client = HttpClientSaManager.Get("p1"))
+{
+	JsonPlaceholder response = client.GetAsync<JsonPlaceholder>("posts/100").Result;
+}
+
+// this can be used to create an instance for one time usage, but it's suggested
+// to use a singleton throughtout the lifetime of your application
+// http://stackoverflow.com/questions/15705092/do-httpclient-and-httpclienthandler-have-to-be-disposed
 using (var client = new HttpClientSa("p1"))
 {
 	JsonPlaceholder response = client.GetAsync<JsonPlaceholder>("posts/100").Result;
 }
 
-or
+// or
 
-// allows for a singleton object to be created and maintained by HttpClientSaManager
-using (var client = HttpClientSaManager.NewClient("p1"))
+using (var client = HttpClientSaManager.Get("p1", forceNewInstance: true))
 {
 	JsonPlaceholder response = client.GetAsync<JsonPlaceholder>("posts/100").Result;
 }
@@ -50,7 +58,7 @@ Clients can also be configured within code:
 HttpClientSaManager.Remove("placeholder");
 HttpClientSaManager.Add("placeholder", "http://jsonplaceholder.typicode.com/posts/100");
 
-using(var client = HttpClientSaManager.NewClient("placeholder"))
+using(var client = HttpClientSaManager.Get("placeholder"))
 {
 	var response = client.Get<JsonPlaceholder>();
 }
@@ -63,15 +71,15 @@ If the database is setup using sc_Create_Db_Objects.sql, tracing can be turn on 
 The tracing will record both the request and response.
 
 ```xml
-  <configSections>
+<configSections>
 	<section name="clientExtensions" type="Ucsb.Sa.Enterprise.ClientExtensions.Configuration.ClientExtensionsConfigurationSection,Ucsb.Sa.Enterprise.ClientExtensions" />
-  </configSections>
+</configSections>
 
-  <clientExtensions>
+<clientExtensions>
 	<httpClients>
 	  <httpClient name="p1" baseAddress="http://jsonplaceholder.typicode.com" traceLevel="All|None" />
 	</httpClients>
-  </clientExtensions>
+</clientExtensions>
 ```
 
 Or within code:
@@ -81,7 +89,7 @@ HttpClientSaManager.Add("placeholder", "http://jsonplaceholder.typicode.com/post
 var config = HttpClientSaManager.GetConfig("placeholder");
 config.TraceLevel = HttpClientSaTraceLevel.All;
 
-using(var client = HttpClientSaManager.NewClient("placeholder"))
+using(var client = HttpClientSaManager.Get("placeholder"))
 {
 	client.TraceLevel = HttpClientSaTraceLevel.None;
 	var response = client.Get<JsonPlaceholder>();
@@ -100,7 +108,7 @@ This can be accomplished with:
 ```csharp
 HttpClientSaManager.Add("placeholder", "http://jsonplaceholder.typicode.com/posts");
 
-using(var client = HttpClientSaManager.NewClient("placeholder"))
+using(var client = HttpClientSaManager.Get("placeholder"))
 {
 	var response = client.GetCached<List<JsonPlaceholder>>();
 }
@@ -111,7 +119,7 @@ Or async ...
 ```csharp
 HttpClientSaManager.Add("placeholder", "http://jsonplaceholder.typicode.com/posts");
 
-using(var client = HttpClientSaManager.NewClient("placeholder"))
+using(var client = HttpClientSaManager.Get("placeholder"))
 {
 	var response = await client.GetCachedAsync<List<JsonPlaceholder>>();
 }
@@ -130,7 +138,7 @@ To pass across a MS DTC Transaction Id, the code must be wrapped in a ```Transac
 ```csharp
 using (var scope = new TransactionScope())
 {
-	using (var client = new HttpClientSa("http://mvcextensions.local.sa.ucsb.edu/api/transaction"))
+	using (var client = HttpClientSaManager.Get("p1"))
 	{
 		var result = client.Get();	// will implicitly add transaction id
 		Assert.IsTrue(!string.IsNullOrEmpty(result));
@@ -151,7 +159,7 @@ of ```false``` will allow for transactions to be implicitly added.
 ```csharp
 using (var scope = new TransactionScope())
 {
-	using (var client = new HttpClientSa("http://mvcextensions.local.sa.ucsb.edu/api/transaction"))
+	using (var client = HttpClientSaManager.Get("p1"))
 	{
 		client.IgnoreImplicitTransactions = true;
 		var result = client.Get();	// transaction will be ignored
