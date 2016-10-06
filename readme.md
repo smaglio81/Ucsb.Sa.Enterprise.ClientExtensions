@@ -1,8 +1,8 @@
 ## Ucsb.Sa.Enterprise.ClientExtensions
 
 Before using this project I would suggest checking these out:
-    Microsoft.Rest.ClientRuntime: [https://www.nuget.org/packages/Microsoft.Rest.ClientRuntime/](https://www.nuget.org/packages/Microsoft.Rest.ClientRuntime/)
-    System.Net.Http.Formatting: [https://msdn.microsoft.com/en-us/library/system.net.http.formatting(v=vs.118).aspx](https://msdn.microsoft.com/en-us/library/system.net.http.formatting(v=vs.118).aspx)
+* Microsoft.Rest.ClientRuntime: [https://www.nuget.org/packages/Microsoft.Rest.ClientRuntime/](https://www.nuget.org/packages/Microsoft.Rest.ClientRuntime/)
+* System.Net.Http.Formatting: [https://msdn.microsoft.com/en-us/library/system.net.http.formatting(v=vs.118).aspx](https://msdn.microsoft.com/en-us/library/system.net.http.formatting(v=vs.118).aspx)
 
 Adds some functionality around HttpClient:
 
