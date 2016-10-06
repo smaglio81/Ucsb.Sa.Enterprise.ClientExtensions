@@ -1,8 +1,11 @@
 ﻿using System;
 using System.Collections;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
+using System.Net;
 using System.Net.Http;
+using System.Net.Http.Formatting;
 using System.Net.Http.Headers;
 using System.Runtime.Caching;
 using System.Runtime.CompilerServices;
@@ -11,6 +14,8 @@ using System.Threading;
 using System.Threading.Tasks;
 using System.Transactions;
 using Newtonsoft.Json;
+using Newtonsoft.Json.Linq;
+using Newtonsoft.Json.Schema;
 using Newtonsoft.Json.Serialization;
 using Ucsb.Sa.Enterprise.ClientExtensions.Data;
 
@@ -57,7 +62,7 @@ namespace Ucsb.Sa.Enterprise.ClientExtensions
 		/// <summary>
 		/// Internal cache for lookup tables.
 		/// </summary>
-		internal MemoryCache _Cache = new MemoryCache("HttpClientSa");
+		internal MemoryCache	_Cache = new MemoryCache("HttpClientSa");
 
 		#endregion
 
@@ -243,7 +248,11 @@ namespace Ucsb.Sa.Enterprise.ClientExtensions
 		public async Task<T> GetAsync<T>(string url = "", string datatype = "json", Transaction transaction = null)
 		{
 			var response = await Execute(url, HttpMethod.Get, null, datatype, transaction);
-			if (!response.IsSuccessStatusCode) { return default(T); }
+			if (!response.IsSuccessStatusCode)
+			{
+				TestInternalServerError(response);
+				return default(T);
+			}
 
 			var content = response.ResponseAsString();
 			return HttpResponseMessageExtensions.DeserializeHttpResponse<T>(content, datatype);
@@ -382,7 +391,11 @@ namespace Ucsb.Sa.Enterprise.ClientExtensions
 		public async Task<T> PostAsync<T>(string url = "", object data = null, string datatype = "json", Transaction transaction = null)
 		{
 			var response = await Execute(url, HttpMethod.Post, data, datatype, transaction);
-			if (!response.IsSuccessStatusCode) { return default(T); }
+			if (!response.IsSuccessStatusCode)
+			{
+				TestInternalServerError(response);
+				return default(T);
+			}
 
 			var content = response.ResponseAsString();
 			return HttpResponseMessageExtensions.DeserializeHttpResponse<T>(content, datatype);
@@ -446,7 +459,11 @@ namespace Ucsb.Sa.Enterprise.ClientExtensions
 		public async Task<T> PutAsync<T>(string url = "", object data = null, string datatype = "json", Transaction transaction = null)
 		{
 			var response = await Execute(url, HttpMethod.Put, data, datatype, transaction);
-			if (!response.IsSuccessStatusCode) { return default(T); }
+			if (!response.IsSuccessStatusCode)
+			{
+				TestInternalServerError(response);
+				return default(T);
+			}
 
 			var content = response.ResponseAsString();
 			return HttpResponseMessageExtensions.DeserializeHttpResponse<T>(content, datatype);
@@ -498,10 +515,48 @@ namespace Ucsb.Sa.Enterprise.ClientExtensions
 		public async Task<T> DeleteAsync<T>(string url = "", string datatype = "json", Transaction transaction = null)
 		{
 			var response = await Execute(url, HttpMethod.Delete, null, datatype, transaction);
-			if (!response.IsSuccessStatusCode) { return default(T); }
+			if (!response.IsSuccessStatusCode)
+			{
+				TestInternalServerError(response);
+				return default(T);
+			}
 
 			var content = response.ResponseAsString();
 			return HttpResponseMessageExtensions.DeserializeHttpResponse<T>(content, datatype);
+		}
+
+		public string HttpInternalServerErrorJsonSchema =
+			@"{
+				'type': 'object',
+				'properties': {
+					'Message': {'type': 'string'},
+					'ExceptionMessage': {'type': 'string'},
+					'ExceptionType': {'type': 'string'},
+					'StackTrace': {'type': 'string'},
+					'InnerException': {'type': 'object'}
+				}	
+			}";
+
+		/// <summary>
+		/// 
+		/// </summary>
+		/// <param name="response"></param>
+		public void TestInternalServerError(HttpResponseMessage response)
+		{
+			//	only attempt to parse HTTP 500 errors
+			if (response.StatusCode != HttpStatusCode.InternalServerError) { return; }
+
+			JsonSchema schema = JsonSchema.Parse(HttpInternalServerErrorJsonSchema);
+			var jsonResponse = response.ResponseAsString();
+			JObject jsonObject = JObject.Parse(jsonResponse);
+			if (!jsonObject.IsValid(schema))
+			{
+				//	it's not the Internal Server Error information that .NET produces
+				return;
+			}
+
+			//	this should successfully deserialize
+			throw new Exception(jsonResponse);
 		}
 
 		/// <summary>
@@ -528,21 +583,28 @@ namespace Ucsb.Sa.Enterprise.ClientExtensions
 		/// Configures the clients return datatype and sets request headers.
 		/// </summary>
 		/// <param name="datatype">The return datatype.</param>
-		public void ConfigureRequestHeaders(string datatype = "json")
+		public void ConfigureRequestHeaders(string datatype = "json", HttpRequestMessage request = null)
 		{
 			MediaTypeWithQualityHeaderValue acceptHeader = null;
-			switch (datatype.ToLower())
+
+			var toUpdate = DefaultRequestHeaders;
+			if (request != null)
 			{
-				case "json": acceptHeader = new MediaTypeWithQualityHeaderValue("application/json"); break;
+				toUpdate = request.Headers;
 			}
 
-			if (acceptHeader != null)
+			switch (datatype.ToLower())
 			{
-				if (!DefaultRequestHeaders.Accept.Contains(acceptHeader))
-				{
-					DefaultRequestHeaders.Accept.Clear();
-					DefaultRequestHeaders.Accept.Add(acceptHeader);
-				}
+				case "json":
+					acceptHeader = new MediaTypeWithQualityHeaderValue("application/json");
+					if(!toUpdate.Accept.Contains(acceptHeader)) { toUpdate.Accept.Add(acceptHeader); }
+					break;
+				case "xml": case "rawxml":
+					acceptHeader = new MediaTypeWithQualityHeaderValue("text/xml");
+					if (!toUpdate.Accept.Contains(acceptHeader)) { toUpdate.Accept.Add(acceptHeader); }
+					acceptHeader = new MediaTypeWithQualityHeaderValue("application/xml");
+					if (!toUpdate.Accept.Contains(acceptHeader)) { toUpdate.Accept.Add(acceptHeader); }
+					break;
 			}
 		}
 
@@ -596,24 +658,53 @@ namespace Ucsb.Sa.Enterprise.ClientExtensions
 		internal HttpContent GetHttpContent(object data, string datatype)
 		{
 			HttpContent content = null;
-			switch(datatype.ToLower())
+			string converted = null;
+			MediaTypeFormatter formatter = null;
+			switch (datatype.ToLower())
 			{
 				case "json":
-					var converted = JsonConvert.SerializeObject(data, JsonNetSerializerSettings);
+					formatter = new JsonMediaTypeFormatter();
+					((JsonMediaTypeFormatter)formatter).SerializerSettings = JsonNetSerializerSettings;
+					converted = Serialize(formatter, data);
+					//var converted = JsonConvert.SerializeObject(data, JsonNetSerializerSettings);	// replaced by Serialize()
 					content = new StringContent(converted, Encoding.UTF8, "application/json");
 					break;
+
+				case "xml":
+					formatter = new XmlMediaTypeFormatter();
+					converted = Serialize(formatter, data);
+					content = new StringContent(converted, Encoding.UTF8, "application/xml");
+					break;
+
+				case "rawxml":
+					content = new StringContent(data.ToString(), Encoding.UTF8, "application/xml");
+					break;
 			}
+
 			return content;
 		}
 
-		
+		// http://www.asp.net/web-api/overview/formats-and-model-binding/json-and-xml-serialization
+		internal string Serialize<T>(MediaTypeFormatter formatter, T value)
+		{
+			// Create a dummy HTTP Content.
+			Stream stream = new MemoryStream();
+			var content = new StreamContent(stream);
+			/// Serialize the object.
+			formatter.WriteToStreamAsync(typeof(T), value, stream, content, null).Wait();
+			// Read the serialized string.
+			stream.Position = 0;
+			return content.ReadAsStringAsync().Result;
+		}
+
+
 
 		public virtual async Task<HttpResponseMessage> Execute(
 			string url, HttpMethod method, object data, string datatype = "json", Transaction transaction = null)
 		{
-			ConfigureRequestHeaders(datatype);
-
 			HttpRequestMessage request = new HttpRequestMessage(method, url);
+
+			ConfigureRequestHeaders(datatype, request);
 
 			if (IgnoreImplicitTransactions == false)
 			{

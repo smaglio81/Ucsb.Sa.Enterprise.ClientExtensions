@@ -1,8 +1,10 @@
 ﻿using Newtonsoft.Json;
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using System.Net.Http;
+using System.Net.Http.Formatting;
 using System.Text;
 using System.Threading.Tasks;
 
@@ -88,14 +90,44 @@ namespace Ucsb.Sa.Enterprise.ClientExtensions
 		/// <param name="datatype">The datatype of the content (ie. json, etc.)</param>
 		/// <returns></returns>
 		public static T DeserializeHttpResponse<T>(string result, string datatype = "json")
-        {
+		{
+			MediaTypeFormatter formatter = null;
             T deserialized = default(T);
             switch (datatype.ToLower())
             {
-                case "json": deserialized = JsonConvert.DeserializeObject<T>(result); break;
+                case "json":
+					formatter = new JsonMediaTypeFormatter();
+		            deserialized = DeserializeGeneric<T>(formatter, result);
+		            //deserialized = JsonConvert.DeserializeObject<T>(result); break;
+		            break;
+				case "xml":
+					formatter = new XmlMediaTypeFormatter();
+					deserialized = DeserializeGeneric<T>(formatter, result);
+					//deserialized = JsonConvert.DeserializeObject<T>(result); break;
+					break;
+				case "rawxml":
+			        throw new ArgumentException(
+						"datatype",
+						"When using datatype 'rawxml', the only valid return type is 'string'. " +
+						"Please use GetAsyncAsString, PutAsyncAsString, PostAsyncAsString, or DeleteAsyncAsString instead."
+					);
+		            break;
             }
             return deserialized;
         }
 
-    }
+		// http://www.asp.net/web-api/overview/formats-and-model-binding/json-and-xml-serialization
+		internal static T DeserializeGeneric<T>(MediaTypeFormatter formatter, string str)
+		{
+			// Write the serialized string to a memory stream.
+			Stream stream = new MemoryStream();
+			StreamWriter writer = new StreamWriter(stream);
+			writer.Write(str);
+			writer.Flush();
+			stream.Position = 0;
+			// Deserialize to an object of type T
+			return (T) formatter.ReadFromStreamAsync(typeof(T), stream, null, null).Result;
+		}
+
+	}
 }
