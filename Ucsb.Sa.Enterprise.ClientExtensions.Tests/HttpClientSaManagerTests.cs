@@ -177,5 +177,15 @@ namespace Ucsb.Sa.Enterprise.ClientExtensions.Tests
 				Assert.AreEqual("v1", hclient.RequestHeaders["n1"]);
 			}
 		}
+
+		[TestMethod]
+		public void DelegatingHandlerCreation()
+		{
+			var client = HttpClientSaManager.Get("p1");
+			Assert.IsTrue(client.SendAsyncMessageHandler is HttpClientSaRootDelegatingHandler);
+
+			client = HttpClientSaManager.Get("p1-delegatinghandler");
+			Assert.IsTrue(client.SendAsyncMessageHandler is DummyHandler);
+		}
 	}
 }

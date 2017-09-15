@@ -6,7 +6,7 @@
 		<title>Ucsb.Sa.Enterprise.ClientExtensions</title>
 		<authors>Steven Maglio</authors>
 		<owners>Steven Maglio</owners>
-		<projectUrl>http://tfs.sa.ucsb.edu/tfs/SIST/Ucsb.Sa.Enterprise/_versionControl#path=%24%2FUcsb.Sa.Enterprise%2FUcsb.Sa.Enterprise.ClientExtensions%2FDev&amp;_a=contents</projectUrl>
+		<projectUrl>https://sist-sa-ucsb.visualstudio.com/Ucsb.Sa.Enterprise/_versionControl?path=%24%2FUcsb.Sa.Enterprise%2FUcsb.Sa.Enterprise.ClientExtensions%2FDev%2FUcsb.Sa.Enterprise.ClientExtensions%2Freadme.md&amp;version=T&amp;_a=preview</projectUrl>
 		<iconUrl>http://static.sa.ucsb.edu/images/footer_ucsb.jpg</iconUrl>
 		<requireLicenseAcceptance>false</requireLicenseAcceptance>
 		<description>A set of http client extensions to help ease the use of rest apis within SA.</description>

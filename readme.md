@@ -6,13 +6,57 @@ Before using this project I would suggest checking these out:
 
 Adds some functionality around HttpClient:
 
+* Client Configuration in .config and code
+    * \{env} keyword support
+    * Basic Authorization Header Base64 Encoding Support
 * Basic parsing of json to objects (Newtonsoft.JSON)
 * Outgoing call tracing
 * Response caching
 * Implicit MS DTC Transaction Passing
+* Delegating Handlers
 
 
-### Client Configurations
+#### Installation
+
+Using `nuget` to install the `Ucsb.Sa.Enterprise.ClientExtensions.Debug` package
+will put the necessary libraries and references in place.
+
+
+If you are planning on predefining `httpclient`'s in the .config file you should add this
+`<configSections>` declaration:
+
+```xml
+<section name="clientExtensions" type="Ucsb.Sa.Enterprise.ClientExtensions.Configuration.ClientExtensionsConfigurationSection,Ucsb.Sa.Enterprise.ClientExtensions" />
+```
+
+This allows the `<clientExtensions>` section to be added. Here's an example:
+
+```xml
+<configSections>
+    <section name="clientExtensions" type="Ucsb.Sa.Enterprise.ClientExtensions.Configuration.ClientExtensionsConfigurationSection,Ucsb.Sa.Enterprise.ClientExtensions" />
+</configSections>
+
+<appSettings>
+    <add key="applicationName" value="{example: Ucsb.Sa.Registrar.Courses}" />
+    <add key="environment" value="[local|dev|qa|prod]" />
+</appSettings>
+ 
+<connectionStrings>
+    <add name="Instrumentation" connectionString="Initial Catalog=Instrumentation;Data Source=instrumentation.sql.{env}.sa.ucsb.edu,2433;Integrated Security=SSPI;" />
+</connectionStrings>
+
+<clientExtensions>
+    <httpClients default="client1" traceLevel="ALL|[NONE]">
+        <httpClient name="client1" baseAddress="http://jsonplaceholder.typicode.com" traceLevel="ALL|[NONE]" singleton="[true]|false">
+            <header name="h1" value="v1" />
+        </httpClient>
+    </httpClients>
+</clientExtensions>
+```
+
+
+
+### Client Configurations in .config
 
 Client configurations can be defined in code or within the config file. The purpose of the configuration is to reduce the
 amount of redudant configuration information within the source code. Header values can also be predefined withitn the config
@@ -69,6 +113,77 @@ using(var client = HttpClientSaManager.Get("placeholder"))
 ```
 
 
+### Client Configuration in Code
+
+You can also setup a default client configuration in your code. This default configuration can be
+overridden by values in the .config file (if needed). Basically, the idea is that you can
+create a default configuration in your code. And, if you ever need to debug it by setting
+the baseAddress to something else, then you can add a .config override.
+
+```csharp
+public class DefaultConfigTestProxy: HttpClientSa
+{
+
+	public static HttpClientSaConfiguration DefaultConfig = new HttpClientSaConfiguration()
+	{
+		Name = "DefaultConfigTest",
+		BaseAddress = "http://your.{env}.com/webservices/students/",
+		Headers = new Dictionary<string, string>() { { "Authorization", "Basic encodedString" } }
+	};
+
+	public DefaultConfigTestProxy() : base(DefaultConfig) {}
+}
+```
+
+
+### \{env\} keyword support
+
+In your baseAddresses you can use the \{env} keyword so that default configurations will "automatically"
+use the correct address for the given environment.
+
+To use the \{env} keyword, you **have** to add an `appSettings\add[name='environment']` value
+to your .config. Like so:
+
+```xml
+<appSettings>
+	<add key="environment" value="local" /> <!-- local, dev, test, prod -->
+</appSettings>
+```
+
+Then this will work:
+```csharp
+public class DefaultConfigTestProxy: HttpClientSa
+{
+
+	public static HttpClientSaConfiguration DefaultConfig = new HttpClientSaConfiguration()
+	{
+		Name = "DefaultConfigTest",
+		BaseAddress = "http://your.{env}.com/webservices/students/",
+		Headers = new Dictionary<string, string>() { { "Authorization", "Basic encodedString" } }
+	};
+
+	public DefaultConfigTestProxy() : base(DefaultConfig) {}
+}
+```
+
+
+### Basic Authorization Header Base64 Encoding Support
+
+When using a [Basic Authorization](https://en.wikipedia.org/wiki/Basic_access_authentication) header
+you can setup the username & password and the .config configuration. Like so:
+
+```xml
+<clientExtensions>
+	<httpClients>
+		<httpClient name="basicAuth" baseAddress="http://jsonplaceholder.typicode.com/">
+			<header name="Authorization" username="asdf" password="1234" />
+		</httpClient>
+	</httpClients>
+</clientExtensions>
+```
+
+
+
 ### Tracing
 
 If the database is setup using sc_Create_Db_Objects.sql, tracing can be turn on for outgoing calls.
@@ -102,6 +217,9 @@ using(var client = HttpClientSaManager.Get("placeholder"))
 
 
 ### Response Caching
+
+(note: there is a `Ucsb.Sa.Enterprise.ClientExtensions.Redis` package to give Redis caching across multiple servers.) 
+
 
 Sometimes you have calls which essentially load lookup tables. These tables are fine to cache
 for a limited amount of time, without a need for them to always be insync with the original
@@ -177,3 +295,49 @@ using (var scope = new TransactionScope())
 ```
 
 
+
+
+### Delegating Handlers
+
+Microsoft's implementation has an [HttpClientFactory](https://msdn.microsoft.com/en-us/library/system.net.http.httpclientfactory%28v=vs.118%29.aspx?f=255&MSPPError=-2147217396)
+which allows for interceptors to be placed at a very low level in the call stack. They intercept the
+request message right before it's sent, and right after the response is recieved. It's explained
+better in this stackoverflow post: [HttpClientFactory.Create vs new HttpClient](https://msdn.microsoft.com/en-us/library/system.net.http.httpclientfactory%28v=vs.118%29.aspx?f=255&MSPPError=-2147217396).
+
+To duplicate this feature, `HttpClientConfiguration` has been updated to take in type information
+about `DelegatingHandlers` and use them in the same way `HttpClientFactory` does.
+
+In code:
+``` csharp
+public class DefaultConfigTestProxy: HttpClientSa, IDefaultConfigTestService
+{
+
+	public static HttpClientSaConfiguration DefaultConfig = new HttpClientSaConfiguration()
+	{
+		Name = "DefaultConfigTest",
+		BaseAddress = "http://registrar.{env}.sa.ucsb.edu/webservices/students/",
+		Headers = new Dictionary<string, string>() { { "Authorization", "Basic encodedString" } },
+		DelegatingHandlers = new List<DelegatingHandlerDefinition>()
+		{
+			new DelegatingHandlerDefinition() { ClassName = "DummyHandler", AssemblyName = "Ucsb.Sa.Enterprise.ClientExtensions.Tests" }
+		}
+	};
+
+	public DefaultConfigTestProxy() : base(DefaultConfig) {}
+
+	...
+}
+```
+
+In configuration:
+``` xml
+<clientExtensions>
+	<httpClients>
+		<httpClient name="p1-delegatinghandler" baseAddress="http://jsonplaceholder.typicode.com/" traceLevel="All" serializeToCamelCase="false">
+			<delegatingHandlers>
+				<handler class="DummyHandler" assembly="Ucsb.Sa.Enterprise.ClientExtensions.Tests" />
+			</delegatingHandlers>
+		</httpClient>
+	</httpClients>
+</clientExtensions>
+```

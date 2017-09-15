@@ -23,6 +23,7 @@ namespace Ucsb.Sa.Enterprise.ClientExtensions
 			Headers = new Dictionary<string, string>();
 			SerializeToCamelCase = true;
 			IgnoreImplicitTransactions = false;
+			DelegatingHandlers = new List<DelegatingHandlerDefinition>();
 		}
 
 		/// <summary>
@@ -31,7 +32,7 @@ namespace Ucsb.Sa.Enterprise.ClientExtensions
 		public string Name { get; set; }
 
 		/// <summary>
-		/// Gets or sets the base address for the client.
+		/// Gets or sets the base address for the client. The base address can use an {env} substitution.
 		/// </summary>
 		public string BaseAddress { get; set; }
 
@@ -75,6 +76,12 @@ namespace Ucsb.Sa.Enterprise.ClientExtensions
 			get { return _Headers; }
 			set { if (value != null) { _Headers = value; } }
 		}
+
+		/// <summary>
+		/// Gets or sets the list of <see cref="System.Net.Http.DelegatingHandler" /> objects
+		/// to add into the <see cref="HttpClientSa" /> instance.
+		/// </summary>
+		public IList<DelegatingHandlerDefinition> DelegatingHandlers { get; set; }
 
 		public override bool Equals(object obj)
 		{

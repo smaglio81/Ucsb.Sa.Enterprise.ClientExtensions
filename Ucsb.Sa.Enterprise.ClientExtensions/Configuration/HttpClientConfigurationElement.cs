@@ -182,6 +182,19 @@ namespace Ucsb.Sa.Enterprise.ClientExtensions.Configuration
 			}
 		}
 
+		/// <summary>
+		/// Provides access to the container information in the section.
+		/// </summary>
+		[ConfigurationProperty("delegatingHandlers", IsDefaultCollection = false, IsKey = false, IsRequired = false)]
+		[ConfigurationCollection(typeof(DelegatingHandlerConfigurationElementCollection), AddItemName = "handler")]
+		public DelegatingHandlerConfigurationElementCollection DelegatingHandlers
+		{
+			get
+			{
+				return (DelegatingHandlerConfigurationElementCollection)this["delegatingHandlers"];
+			}
+		}
+
 		#endregion
 
 	}

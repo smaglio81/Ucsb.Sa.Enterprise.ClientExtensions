@@ -1,6 +1,11 @@
 ﻿using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
+using System.Configuration;
+using System.Linq;
+using System.Net;
+using System.Net.Http;
+using System.Reflection;
 using Ucsb.Sa.Enterprise.ClientExtensions.Configuration;
 
 namespace Ucsb.Sa.Enterprise.ClientExtensions
@@ -32,6 +37,7 @@ namespace Ucsb.Sa.Enterprise.ClientExtensions
 		static HttpClientSaManager()
 		{
 			TraceLevel = HttpClientSaTraceLevel.None;
+			GetNewClientInstance = () => new HttpClientSa();	// this is used in Get(string name, bool forceNewInstance = false)
 		}
 
 		#endregion
@@ -49,6 +55,8 @@ namespace Ucsb.Sa.Enterprise.ClientExtensions
 		/// </summary>
 		public static HttpClientSaTraceLevel TraceLevel { get; set; }
 
+		public static Func<HttpClientSa> GetNewClientInstance { get; set; }
+
 		#endregion
 
 		#region public methods
@@ -60,8 +68,8 @@ namespace Ucsb.Sa.Enterprise.ClientExtensions
 		/// <returns>A new instance of <see cref="HttpClientSa" />.</returns>
 		/// <exception cref="Exception">HttpClientSaManager could not find a default name for client configurations.
 		/// Please ensure a default configuration and name are defined before usage.</exception>
-		[Obsolete("After Singleton instances became the default creation pattern the name NewClient became incorrent." +
-		          "This has been replace by the method Get().")]
+		[Obsolete("Use Get() instead. After Singleton instances became the default creation pattern the name NewClient became incorrect." +
+		          "This has been replaced by the method Get().")]
 		public static HttpClientSa NewClient()
 		{
 			return Get();
@@ -99,8 +107,8 @@ namespace Ucsb.Sa.Enterprise.ClientExtensions
 		/// A client name must be given to lookup the HttpClientSaConfiguration. Please supply
 		/// a name and try again.</exception>
 		/// <exception cref="Exception">When configuration errors occur.</exception>
-		[Obsolete("After Singleton instances became the default creation pattern the name NewClient became incorrent." +
-				  "This has been replace by the method Get(string name, bool forceNewInstance = false).")]
+		[Obsolete("After Singleton instances became the default creation pattern the name NewClient became incorrect." +
+				  "This has been replaced by the method Get(string name, bool forceNewInstance = false).")]
 		public static HttpClientSa NewClient(string name, bool forceNewInstance = false)
 		{
 			return Get(name, forceNewInstance);
@@ -139,7 +147,7 @@ namespace Ucsb.Sa.Enterprise.ClientExtensions
 					client = _Singletons[name];
 				} else
 				{
-					client = new HttpClientSa();
+					client = GetNewClientInstance();
 					ConfigureClient(client, config);
 
 					_Singletons.TryAdd(name, client);
@@ -147,11 +155,29 @@ namespace Ucsb.Sa.Enterprise.ClientExtensions
 			}
 			else
 			{
-				client = new HttpClientSa();
+				client = GetNewClientInstance();
 				ConfigureClient(client, config);
 			}
 
 			return client;
+		}
+
+		/// <summary>
+		/// Configure an <see cref="HttpClientSa" /> <paramref name="client" /> with the given 
+		/// <see cref="HttpClientSaConfiguration" /> <paramref name="config" /> information. This should only
+		/// be used once when creating a new <see cref="HttpClientSa" /> object. This will perform an extra
+		/// check before configuring the like to see an override for the "default" value is given in the config.
+		/// </summary>
+		/// <param name="client">The client to configure</param>
+		/// <param name="config">The configuration to apply</param>
+		public static void ConfigureClientWithOverrideCheck(HttpClientSa client, HttpClientSaConfiguration config)
+		{
+			HttpClientSaConfiguration fromConfigFile;
+			if (TryGetConfig(config.Name, out fromConfigFile))
+			{
+				config = fromConfigFile;	//	override the default configuration
+			}
+			ConfigureClient(client, config);
 		}
 
 		/// <summary>
@@ -165,7 +191,15 @@ namespace Ucsb.Sa.Enterprise.ClientExtensions
 		{
 			if (string.IsNullOrWhiteSpace(config.BaseAddress) == false)
 			{
-				client.BaseAddress = new Uri(config.BaseAddress);
+				
+				if (config.BaseAddress.Contains("{env}"))
+				{
+					//	the base address uses an {env} substitution
+					client.BaseAddress = new Uri(ReplaceEnv(config.BaseAddress, client));
+				} else {
+					//	a normal base address
+					client.BaseAddress = new Uri(config.BaseAddress);
+				}
 			}
 			client.RequestHeaders = config.Headers;
 			client.ConfigureHeaders();
@@ -173,6 +207,139 @@ namespace Ucsb.Sa.Enterprise.ClientExtensions
 			client.SerializeToCamelCase = config.SerializeToCamelCase;
 			client.IgnoreImplicitTransactions = config.IgnoreImplicitTransactions;
 			client.PostDbLogged = config.PostDbLogged;
+
+
+			if (client.SendAsyncMessageHandler == null)
+			{
+				client.SendAsyncMessageHandler = new HttpClientSaRootDelegatingHandler(client);
+			}
+
+			foreach (var handlerDef in config.DelegatingHandlers)
+			{
+				var assembly = Assembly.Load(handlerDef.AssemblyName);
+				var type = assembly.GetTypes().FirstOrDefault(i => i.Name == handlerDef.ClassName);
+				if (type == null)
+				{
+					var message = string.Format(
+						"HttpClient '{0}'s configuration has been defined with a DelegatingHandler of " +
+						"class '{1}' in assembly '{2}'. The class '{1}' could not be found " +
+						"in assembly with full name '{3}'. Please check the class name is correct and" +
+						"that it exists within the assembly.",
+						config.Name, handlerDef.ClassName, handlerDef.AssemblyName,
+						assembly.FullName
+					);
+					throw new Exception(message);
+				}
+
+				var handlerObjInst = assembly.CreateInstance(type.FullName);
+				if (handlerObjInst is DelegatingHandler)
+				{
+					var handlerInst = handlerObjInst as DelegatingHandler;
+					handlerInst.InnerHandler = client.SendAsyncMessageHandler;
+					client.SendAsyncMessageHandler = handlerInst;
+				}
+				else
+				{
+					var message = string.Format(
+						"HttpClient '{0}'s configuration has been defined with a DelegatingHandler of " +
+						"class '{1}' in assembly '{2}'. The instance of the class with full name '{3}' " +
+						"in assembly full name '{4}' does not extend class System.Net.Http.DelegatingHandler. " +
+						"DelegatingHandlers must extend this class to be used.",
+						config.Name, handlerDef.ClassName, handlerDef.AssemblyName,
+						handlerObjInst.GetType().FullName, assembly.FullName
+					);
+					throw new Exception(message);
+				}
+			}
+		}
+
+		/// <summary>
+		/// Replaces an {env} substition within a url. It will convert strings like
+		/// http://registrar.{env}.sa.ucsb.edu/webservices/students to
+		/// http://registrar.dev.sa.ucsb.edu/webservices/students in the "dev" environment.
+		/// </summary>
+		/// <param name="url">The url the convert.</param>
+		/// <param name="client">The HttpClientSa object its being converted for (this is for error reporting).</param>
+		/// <returns>The converted url.</returns>
+		public static string ReplaceEnv(string url, HttpClientSa client)
+		{
+			var environment = ConfigurationManager.AppSettings["environment"];
+
+			// validate null
+			if (string.IsNullOrWhiteSpace(environment))
+			{
+				throw new ArgumentException(
+					"When using an HttpClientSa object with a url that contains an {env} substitution (" + url +
+					") you must include a setting in appSettings/add[name=\"environment\"] for the {env} " +
+					"substitution to use. This error was found when configuring " + client.GetType().FullName + "."
+				);
+			}
+
+			//	validate value
+			switch (environment.ToLower().Trim())
+			{
+				case "local":
+				case "localhost":
+					environment = "local";
+					break;
+
+				case "dev":
+				case "development":
+				case "int":
+				case "integration":
+					environment = "dev";
+					break;
+
+				case "qa":
+				case "quality assurance":
+				case "test":
+					environment = "test";
+					break;
+
+				case "pilot":
+				case "staging":
+				case "prod":
+				case "production":
+					environment = "prod";
+					break;
+
+				default:
+					throw new ArgumentException(
+						"When using an HttpClientSa object with a url that contains an {env} substitution (" + url +
+						") the environment value found in appSettings/add[name=\"environment\"] " +
+						"must be either 'local', 'dev', 'test', or 'prod'. " +
+						"This error was found when configuring " + client.GetType().FullName + "."
+					);
+			}
+
+			//	add http to ensure new Uri doesn't throw an error
+			if (url.StartsWith("http") == false) { url = "http://" + url; }
+			
+			//	do the {env} substitution
+			if (url.Contains("{env}"))
+			{
+				switch (environment.ToLower())
+				{
+					case "prod":
+						if (url.Contains(".{env}"))
+						{
+							url = url.Replace(".{env}", ""); // converts http://www.{env}.sa.ucsb.edu/
+						} else {
+							if (url.Contains("/{env}."))
+							{
+								url = url.Replace("{env}.", ""); // converts http://{env}.duels.lsaa.ucsb.edu/
+							} else {
+								url = url.Replace("{env}", ""); // converts http://nonnorm.sa.ucsb.edu/{env}/ -- shouldn't be done
+							}
+						}
+						break;
+					default:
+						url = url.Replace("{env}", environment.ToLower());
+						break;
+				}
+			}
+
+			return url;
 		}
 
 		/// <summary>
@@ -198,11 +365,23 @@ namespace Ucsb.Sa.Enterprise.ClientExtensions
 					headers.Add(header.Name, header.Value);
 				}
 
+				var delegatingHandlers = new List<DelegatingHandlerDefinition>();
+				foreach (DelegatingHandlerConfigurationElement handler in client.DelegatingHandlers)
+				{
+					var dhandler = new DelegatingHandlerDefinition()
+					{
+						ClassName = handler.Class,
+						AssemblyName = handler.Assembly
+					};
+					delegatingHandlers.Add(dhandler);
+				}
+
 				var config = new HttpClientSaConfiguration()
 				{
 					Name = client.Name,
 					BaseAddress = client.BaseAddress,
 					Headers = headers,
+					DelegatingHandlers = delegatingHandlers,
 					IsSingleton = client.IsSingleton,
 					SerializeToCamelCase = client.SerializeToCamelCase
 				};
@@ -222,6 +401,24 @@ namespace Ucsb.Sa.Enterprise.ClientExtensions
 			}
 
 			_ConfigLoaded = true;
+		}
+
+		/// <summary>
+		/// Gets the <see cref="HttpClientSaConfiguration" /> for the given name.
+		/// </summary>
+		/// <param name="name">The name of the configuration element.</param>
+		/// <returns>The <see cref="HttpClientSaConfiguration" /> element. Null, if not found.</returns>
+		public static bool TryGetConfig(string name, out HttpClientSaConfiguration config)
+		{
+			try
+			{
+				config = GetConfig(name);
+				return true;
+			}
+			catch {}
+
+			config = null;
+			return false;
 		}
 
 		/// <summary>
@@ -256,16 +453,19 @@ namespace Ucsb.Sa.Enterprise.ClientExtensions
 				}
 			}
 
-			config = GetConfigFromCollection(name);
 			if (config == null)
 			{
-				var message = string.Format(
-					"No configurations were defined for name \"{0}\". Please use Add(string name, " +
-					"string baseAddress, IDictionary<string, string> headers) to add a client " +
-					"definition.",
-					name
-				);
-				throw new Exception(message);
+				config = GetConfigFromCollection(name);
+				if (config == null)
+				{
+					var message = string.Format(
+						"No configurations were defined for name \"{0}\". Please use Add(string name, " +
+						"string baseAddress, IDictionary<string, string> headers) to add a client " +
+						"definition.",
+						name
+					);
+					throw new Exception(message);
+				}
 			}
 
 			return config;
@@ -389,9 +589,9 @@ namespace Ucsb.Sa.Enterprise.ClientExtensions
 			return Remove(config.Name);
 		}
 
-		#endregion
+#endregion
 
-		#region internal methods
+#region internal methods
 
 		internal static void ValidateName(string name)
 		{
@@ -437,7 +637,7 @@ namespace Ucsb.Sa.Enterprise.ClientExtensions
 			return DefaultName;
 		}
 
-		#endregion
+#endregion
 
 	}
 }

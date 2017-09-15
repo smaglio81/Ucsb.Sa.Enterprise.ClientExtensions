@@ -9,6 +9,7 @@ namespace Ucsb.Sa.Enterprise.ClientExtensions
 	{
 		Undefined,
 		None,
+		Error,
 		All
 	}
 
@@ -36,6 +37,7 @@ namespace Ucsb.Sa.Enterprise.ClientExtensions
 			{
 				case "": return HttpClientSaTraceLevel.Undefined;
 				case "none": return HttpClientSaTraceLevel.None;
+				case "error": return HttpClientSaTraceLevel.Error;
 				case "all": return HttpClientSaTraceLevel.All;
 			}
 

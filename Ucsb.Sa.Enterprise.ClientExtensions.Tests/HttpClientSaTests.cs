@@ -11,6 +11,7 @@ using System.Configuration;
 using System.Data.SqlClient;
 using System.Diagnostics;
 using System.EnterpriseServices;
+using System.Net;
 using System.Transactions;
 
 namespace Ucsb.Sa.Enterprise.ClientExtensions.Tests
@@ -22,7 +23,7 @@ namespace Ucsb.Sa.Enterprise.ClientExtensions.Tests
 		[TestMethod]
 		public void Get()
 		{
-			using(var client = new HttpClientSa())
+			using (var client = new HttpClientSa())
 			{
 				var response = client.Get("http://jsonplaceholder.typicode.com/posts/1");
 				Assert.AreEqual(
@@ -53,6 +54,7 @@ namespace Ucsb.Sa.Enterprise.ClientExtensions.Tests
 				finally
 				{
 					uncached.Stop();
+					Console.WriteLine("uncached: " + uncached.ElapsedMilliseconds);
 				}
 
 				var cached = new Stopwatch();
@@ -67,6 +69,7 @@ namespace Ucsb.Sa.Enterprise.ClientExtensions.Tests
 				finally
 				{
 					cached.Stop();
+					Console.WriteLine("cached: " + cached.ElapsedMilliseconds);
 				}
 
 				Assert.IsTrue(uncached.ElapsedTicks > cached.ElapsedTicks);
@@ -108,6 +111,7 @@ namespace Ucsb.Sa.Enterprise.ClientExtensions.Tests
 				finally
 				{
 					uncached.Stop();
+					Console.WriteLine("uncached: " + uncached.ElapsedMilliseconds);
 				}
 
 				var cached = new Stopwatch();
@@ -122,6 +126,7 @@ namespace Ucsb.Sa.Enterprise.ClientExtensions.Tests
 				finally
 				{
 					cached.Stop();
+					Console.WriteLine("cached: " + cached.ElapsedMilliseconds);
 				}
 
 				Assert.IsTrue(uncached.ElapsedTicks > cached.ElapsedTicks);
@@ -159,6 +164,7 @@ namespace Ucsb.Sa.Enterprise.ClientExtensions.Tests
 		{
 			using(var client = new HttpClientSa())
 			{
+				client.TraceLevel = HttpClientSaTraceLevel.All;
 				var data = new JsonPlaceholder() { userId = 1, id = 1,
 					title = "sunt aut facere repellat provident occaecati excepturi optio reprehenderit",
 					body = "quia et suscipit\nsuscipit recusandae consequuntur expedita et cum\nreprehenderit molestiae ut ut quas totam\nnostrum rerum est autem sunt rem eveniet architecto"
@@ -400,6 +406,66 @@ namespace Ucsb.Sa.Enterprise.ClientExtensions.Tests
 
 				Assert.AreEqual(originalCount + 1, client.DefaultRequestHeaders.Count());
 			}
+		}
+
+		[TestMethod]
+		public void CheckDefaultConfiguration()
+		{
+			var proxy = new DefaultConfigTestProxy();
+
+			Assert.AreEqual("http://registrar.local.sa.ucsb.edu/webservices/students/", proxy.BaseAddress.AbsoluteUri);
+		}
+
+		[TestMethod]
+		public void CheckOverrideDefaultConfiguration()
+		{
+			var proxy = new OverrideDefaultConfigTestProxy();
+			
+			Assert.AreEqual("http://jsonplaceholder.local.typicode.com/", proxy.BaseAddress.AbsoluteUri);
+		}
+
+		[TestMethod]
+		public void BasicAuthorization()
+		{
+			using (var client = new HttpClientSa("basicAuth"))
+			{
+				Assert.IsTrue(client.RequestHeaders.Keys.Contains("Authorization"));
+				Assert.AreEqual("Basic YXNkZjoxMjM0", client.RequestHeaders["Authorization"]);
+
+				string throwaway = client.GetAsyncAsString("posts/100").Result;
+
+				JsonPlaceholder response = client.GetAsync<JsonPlaceholder>("posts/100").Result;
+				Assert.AreEqual(10, response.userId);
+				Assert.AreEqual(100, response.id);
+				Assert.AreEqual("at nam consequatur ea labore ea harum", response.title);
+				Assert.AreEqual("cupiditate quo est a modi nesciunt soluta\nipsa voluptas error itaque dicta in\nautem qui minus magnam et distinctio eum\naccusamus ratione error aut", response.body);
+			}
+		}
+
+		[TestMethod]
+		public void RequestTimeout()
+		{
+			try
+			{
+				using (var client = new HttpClientSa("p1"))
+				{
+					client.TraceLevel = HttpClientSaTraceLevel.All;
+					client.Timeout = TimeSpan.FromMilliseconds(1);
+					JsonPlaceholder response = client.GetAsync<JsonPlaceholder>("posts/100").Result;
+					Assert.AreEqual(10, response.userId);
+				}
+			}
+			catch (AggregateException aggregate)
+			{
+				if (aggregate.InnerException.GetType().Name != "TaskCanceledException")
+				{
+					throw;
+				}
+
+				//	 else, do some retry logic
+			}
+
+			System.Threading.Thread.Sleep(5 * 1000);	// let the exception right to the database
 		}
 
 	}

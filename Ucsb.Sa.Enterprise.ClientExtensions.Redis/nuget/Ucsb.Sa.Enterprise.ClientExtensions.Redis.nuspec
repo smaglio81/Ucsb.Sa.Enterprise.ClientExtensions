@@ -1,0 +1,25 @@
+<?xml version="1.0"?>
+<package >
+	<metadata>
+		<id>Ucsb.Sa.Enterprise.ClientExtensions.Redis</id>
+		<version>$version$</version>
+		<title>Ucsb.Sa.Enterprise.ClientExtensions.Redis</title>
+		<authors>Steven Maglio</authors>
+		<owners>Steven Maglio</owners>
+		<projectUrl>https://sist-sa-ucsb.visualstudio.com/Ucsb.Sa.Enterprise/_versionControl?path=%24%2FUcsb.Sa.Enterprise%2FUcsb.Sa.Enterprise.ClientExtensions%2FDev%2FUcsb.Sa.Enterprise.ClientExtensions.Redis%2FReadme.md&amp;version=T&amp;_a=contents</projectUrl>
+		<iconUrl>http://static.sa.ucsb.edu/images/footer_ucsb.jpg</iconUrl>
+		<requireLicenseAcceptance>false</requireLicenseAcceptance>
+		<description>Extends ClientExtensions to move caching into redis.</description>
+		<copyright>Copyright 2015</copyright>
+		<tags>HttpClientSa Redis</tags>
+		<dependencies>
+			<dependency id="Newtonsoft.Json" version="[9.0.1,)" />
+			<dependency id="StackExchange.Redis.StrongName" version="[1.0.488,)" />
+			<dependency id="Ucsb.Sa.Enterprise.ClientExtensions.Debug" version="[1.0.42859,)" />
+		</dependencies>
+		<frameworkAssemblies>
+			<frameworkAssembly assemblyName="System.Runtime.Caching" targetFramework="net40" />
+			<frameworkAssembly assemblyName="System.Transactions" targetFramework="net40" />
+		</frameworkAssemblies>
+	</metadata>
+</package>

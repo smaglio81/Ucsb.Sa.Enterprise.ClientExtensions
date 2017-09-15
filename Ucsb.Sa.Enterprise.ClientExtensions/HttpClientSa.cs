@@ -41,6 +41,11 @@ namespace Ucsb.Sa.Enterprise.ClientExtensions
 		public Action<HttpCall> PostDbLogged = null;
 
 		/// <summary>
+		/// All Callback function to be used in case of exception occur
+		/// </summary>
+		public Action<HttpCall> PostException = null;
+
+		/// <summary>
 		/// The last HTTP response message retrieved using the synchronous overload
 		/// methods.
 		/// </summary>
@@ -62,7 +67,16 @@ namespace Ucsb.Sa.Enterprise.ClientExtensions
 		/// <summary>
 		/// Internal cache for lookup tables.
 		/// </summary>
-		internal MemoryCache	_Cache = new MemoryCache("HttpClientSa");
+		internal Lazy<MemoryCache>	_Cache = new Lazy<MemoryCache>(() => { return new MemoryCache("HttpClientSa"); });
+
+		/// <summary>
+		/// This helps implement <see cref="DelegatingHandler" />.
+		/// DelegatingHandler: https://msdn.microsoft.com/en-us/library/system.net.http.delegatinghandler(v=vs.118).aspx
+		/// -> extends HttpMessageHandler:  https://msdn.microsoft.com/en-us/library/system.net.http.httpmessagehandler(v=vs.118).aspx
+		/// HttpMessageInvoker: https://msdn.microsoft.com/en-us/library/system.net.http.httpmessageinvoker(v=vs.118).aspx
+		/// -> Has constructor that takes HttpMessageHandler
+		/// </summary>
+		public HttpMessageHandler SendAsyncMessageHandler = null;
 
 		#endregion
 
@@ -113,9 +127,22 @@ namespace Ucsb.Sa.Enterprise.ClientExtensions
 		/// </summary>
 		public bool IgnoreImplicitTransactions { get; set; }
 
+		/// <summary>
+		/// Internal cache for lookup tables.
+		/// </summary>
+		internal MemoryCache Cache { get { return _Cache.Value; } }
+
 		#endregion
 
 		#region constructors
+
+		static HttpClientSa()
+		{
+			// NOTE: this has to be updated as new TLS are released. I couldn't figure out
+			//		 how to just say: "Always use the latest".
+			ServicePointManager.SecurityProtocol = 
+				SecurityProtocolType.Tls12 | SecurityProtocolType.Tls11 | SecurityProtocolType.Tls;
+		}
 
 		/// <summary>
 		/// Initializes a new instance of the <see cref="HttpClientSa"/> class.
@@ -135,22 +162,21 @@ namespace Ucsb.Sa.Enterprise.ClientExtensions
 		/// </param>
 		public HttpClientSa(string baseAddress) : this()
 		{
-			if(!string.IsNullOrWhiteSpace(baseAddress))
-			{
-				//	if the base address is actually a name, check for the name in the application config
-				if (baseAddress.Contains("://") == false)
-				{
-					var config = HttpClientSaManager.GetConfig(baseAddress);
-					if (config != null)
-					{
-						HttpClientSaManager.ConfigureClient(this, config);
-					}
-				}
-				else
-				{
-					BaseAddress = new Uri(baseAddress);
-				}
-			}
+			this.CheckBaseAddressAndConfigure(baseAddress);
+		}
+
+		/// <summary>
+		/// Initializes a new instance of the <see cref="HttpClientSa" /> class. This configuration
+		/// can use a url which uses the {env} environment substitution. If this substitution is used
+		/// then an appSettings/add[name="environment"] value must be supplied.
+		/// </summary>
+		/// <param name="defaultConfig">
+		/// A default configuration for the client which can use the {env} substitution. If this
+		/// substitution is used then an appSettings/add[name="environment"] value must be supplied.
+		/// </param>
+		public HttpClientSa(HttpClientSaConfiguration defaultConfig)
+		{
+			this.CheckDefaultConfigAndConfigure(defaultConfig);
 		}
 
 		/// <summary>
@@ -161,11 +187,7 @@ namespace Ucsb.Sa.Enterprise.ClientExtensions
 		public HttpClientSa(string baseAddress, IDictionary<string,string> headers) :
 			this(baseAddress)
 		{
-			if(headers != null)
-			{
-				RequestHeaders = headers;
-				ConfigureHeaders();
-			}
+			this.CheckHeadersAndConfigure(headers);
 		}
 
 		/// <summary>
@@ -177,7 +199,7 @@ namespace Ucsb.Sa.Enterprise.ClientExtensions
 		public HttpClientSa(string baseAddress, IDictionary<string, string> headers, HttpClientSaTraceLevel traceLevel) :
 			this(baseAddress, headers)
 		{
-			TraceLevel = traceLevel;
+			this.CheckTraceLevelAndConfigure(traceLevel);
 		}
 
 		/// <summary>
@@ -195,7 +217,7 @@ namespace Ucsb.Sa.Enterprise.ClientExtensions
 		) :
 			this(baseAddress, headers, traceLevel)
 		{
-			PostDbLogged = postDbLogged;
+			this.CheckPostDbLoggedAndConfigure(postDbLogged);
 		}
 
 		#endregion
@@ -233,7 +255,7 @@ namespace Ucsb.Sa.Enterprise.ClientExtensions
 		/// <returns>The string body of the returned result.</returns>
 		public async Task<string> GetAsyncAsString(string url = "", string datatype = "json", Transaction transaction = null)
 		{
-			var response = await Execute(url, HttpMethod.Get, null, datatype, transaction);
+			var response = await Execute(url, HttpMethod.Get, null, datatype, transaction).ConfigureAwait(false);
 			var content = response.ResponseAsString();
 			return content;
 		}
@@ -247,7 +269,7 @@ namespace Ucsb.Sa.Enterprise.ClientExtensions
 		/// <returns>The string body of the returned result.</returns>
 		public async Task<T> GetAsync<T>(string url = "", string datatype = "json", Transaction transaction = null)
 		{
-			var response = await Execute(url, HttpMethod.Get, null, datatype, transaction);
+			var response = await Execute(url, HttpMethod.Get, null, datatype, transaction).ConfigureAwait(false);
 			if (!response.IsSuccessStatusCode)
 			{
 				TestInternalServerError(response);
@@ -268,7 +290,7 @@ namespace Ucsb.Sa.Enterprise.ClientExtensions
 		/// <param name="datatype">The expected format of the returned data (default: json)</param>
 		/// <param name="policy">The cache item policy. (default: 6 hours absolute time)</param>
 		/// <returns>The lookup table reqeusted.</returns>
-		public T GetCached<T>(string url, string datatype = "json", CacheItemPolicy policy = null)
+		public virtual T GetCached<T>(string url, string datatype = "json", CacheItemPolicy policy = null)
 		{
 			//	http://blog.falafel.com/working-system-runtime-caching-memorycache/
 			Func<T> valueFactory = () => {
@@ -282,7 +304,7 @@ namespace Ucsb.Sa.Enterprise.ClientExtensions
 			}
 
 			var newValue = new Lazy<T>(valueFactory);
-			var oldValue = _Cache.AddOrGetExisting(key: url, value: newValue, policy: policy) as Lazy<T>;
+			var oldValue = Cache.AddOrGetExisting(key: url, value: newValue, policy: policy) as Lazy<T>;
 			try
 			{
 				return (oldValue ?? newValue).Value;
@@ -290,7 +312,7 @@ namespace Ucsb.Sa.Enterprise.ClientExtensions
 			catch
 			{
 				// Handle cached lazy exception by evicting from cache. Thanks to Denis Borovnev for pointing this out!
-				_Cache.Remove(key: url);
+				Cache.Remove(key: url);
 				throw;
 			}
 		}
@@ -305,11 +327,11 @@ namespace Ucsb.Sa.Enterprise.ClientExtensions
 		/// <param name="datatype">The expected format of the returned data (default: json)</param>
 		/// <param name="policy">The cache item policy. (default: 6 hours absolute time)</param>
 		/// <returns>The lookup table reqeusted.</returns>
-		public async Task<T> GetCachedAsync<T>(string url, string datatype = "json", CacheItemPolicy policy = null)
+		public virtual async Task<T> GetCachedAsync<T>(string url, string datatype = "json", CacheItemPolicy policy = null)
 		{
 			//	http://blog.falafel.com/working-system-runtime-caching-memorycache/
 			Func<Task<T>> valueFactory = async () => {
-				var task = await GetAsync<T>(url: url, datatype: datatype);
+				var task = await GetAsync<T>(url: url, datatype: datatype).ConfigureAwait(false);
 				return task;
 			};
 
@@ -319,16 +341,16 @@ namespace Ucsb.Sa.Enterprise.ClientExtensions
 			}
 
 			var newValue = new AsyncLazy<T>(valueFactory);
-			var oldValue = _Cache.AddOrGetExisting(key: url, value: newValue, policy: policy) as AsyncLazy<T>;
+			var oldValue = Cache.AddOrGetExisting(key: url, value: newValue, policy: policy) as AsyncLazy<T>;
 			try
 			{
 				var val = (oldValue ?? newValue);
-				return await val.Value;
+				return await val.Value.ConfigureAwait(false);
 			}
 			catch
 			{
 				// Handle cached lazy exception by evicting from cache. Thanks to Denis Borovnev for pointing this out!
-				_Cache.Remove(key: url);
+				Cache.Remove(key: url);
 				throw;
 			}
 		}
@@ -375,7 +397,7 @@ namespace Ucsb.Sa.Enterprise.ClientExtensions
 		/// <returns></returns>
 		public async Task<string> PostAsyncAsString(string url = "", object data = null, string datatype = "json", Transaction transaction = null)
 		{
-			var response = await Execute(url, HttpMethod.Post, data, datatype, transaction);
+			var response = await Execute(url, HttpMethod.Post, data, datatype, transaction).ConfigureAwait(false);
 			var content = response.ResponseAsString();
 			return content;
 		}
@@ -390,7 +412,7 @@ namespace Ucsb.Sa.Enterprise.ClientExtensions
 		/// <returns></returns>
 		public async Task<T> PostAsync<T>(string url = "", object data = null, string datatype = "json", Transaction transaction = null)
 		{
-			var response = await Execute(url, HttpMethod.Post, data, datatype, transaction);
+			var response = await Execute(url, HttpMethod.Post, data, datatype, transaction).ConfigureAwait(false);
 			if (!response.IsSuccessStatusCode)
 			{
 				TestInternalServerError(response);
@@ -441,7 +463,7 @@ namespace Ucsb.Sa.Enterprise.ClientExtensions
 		/// <returns></returns>
 		public async Task<string> PutAsyncAsString(string url = "", object data = null, string datatype = "json", Transaction transaction = null)
 		{
-			var response = await Execute(url, HttpMethod.Put, data, datatype, transaction);
+			var response = await Execute(url, HttpMethod.Put, data, datatype, transaction).ConfigureAwait(false);
 			var content = response.ResponseAsString();
 			return content;
 		}
@@ -458,7 +480,7 @@ namespace Ucsb.Sa.Enterprise.ClientExtensions
 		/// <returns></returns>
 		public async Task<T> PutAsync<T>(string url = "", object data = null, string datatype = "json", Transaction transaction = null)
 		{
-			var response = await Execute(url, HttpMethod.Put, data, datatype, transaction);
+			var response = await Execute(url, HttpMethod.Put, data, datatype, transaction).ConfigureAwait(false);
 			if (!response.IsSuccessStatusCode)
 			{
 				TestInternalServerError(response);
@@ -500,7 +522,7 @@ namespace Ucsb.Sa.Enterprise.ClientExtensions
 		/// <returns></returns>
 		public async Task<string> DeleteAsyncAsString(string url = "", string datatype = "json", Transaction transaction = null)
 		{
-			var response = await Execute(url, HttpMethod.Delete, null, datatype, transaction);
+			var response = await Execute(url, HttpMethod.Delete, null, datatype, transaction).ConfigureAwait(false);
 			var content = response.ResponseAsString();
 			return content;
 		}
@@ -514,7 +536,7 @@ namespace Ucsb.Sa.Enterprise.ClientExtensions
 		/// <returns></returns>
 		public async Task<T> DeleteAsync<T>(string url = "", string datatype = "json", Transaction transaction = null)
 		{
-			var response = await Execute(url, HttpMethod.Delete, null, datatype, transaction);
+			var response = await Execute(url, HttpMethod.Delete, null, datatype, transaction).ConfigureAwait(false);
 			if (!response.IsSuccessStatusCode)
 			{
 				TestInternalServerError(response);
@@ -653,6 +675,88 @@ namespace Ucsb.Sa.Enterprise.ClientExtensions
 
 		#endregion
 
+		#region protected methods
+
+		/// <summary>
+		/// Check if the <see cref="baseAddress" /> passed into the constructor is actually a name of
+		/// of a configuration element. If it is, then let the <see cref="HttpClientSaManager" />
+		/// configure the instance.
+		/// </summary>
+		/// <param name="baseAddress">"http://something.sa.ucsb.edu/webservices/lkjasd"</param>
+		protected virtual void CheckBaseAddressAndConfigure(string baseAddress)
+		{
+			if (!string.IsNullOrWhiteSpace(baseAddress))
+			{
+				//	if the base address is actually a name, check for the name in the application config
+				if (baseAddress.Contains("://") == false)
+				{
+					var config = HttpClientSaManager.GetConfig(baseAddress);
+					if (config != null)
+					{
+						HttpClientSaManager.ConfigureClient(this, config);
+					}
+				}
+				else
+				{
+					BaseAddress = new Uri(baseAddress);
+				}
+			}
+		}
+
+		/// <summary>
+		/// Check the <see cref="defaultConfig" /> passed into the constructor is not null. If it isn't,
+		/// then let the <see cref="HttpClientSaManager" /> configure the instance.
+		/// </summary>
+		/// <param name="defaultConfig">The default configuration settings.</param>
+		protected virtual void CheckDefaultConfigAndConfigure(HttpClientSaConfiguration defaultConfig)
+		{
+			if (defaultConfig == null)
+			{
+				throw new ArgumentNullException(
+					"defaultConfig",
+					"When using a defaultConfig with an HttpClientSa object, the defaultConfig variable " +
+					"must not be null. Please supply an object with the configuration or use an alternate " +
+					"constructor."
+				);
+			}
+
+			HttpClientSaManager.ConfigureClientWithOverrideCheck(this, defaultConfig);
+		}
+
+		/// <summary>
+		/// Check if the passed in <see cref="headers"/> are null. If they aren't, then configure
+		/// default headers.
+		/// </summary>
+		/// <param name="headers"></param>
+		protected virtual void CheckHeadersAndConfigure(IDictionary<string, string> headers)
+		{
+			if (headers != null)
+			{
+				RequestHeaders = headers;
+				ConfigureHeaders();
+			}
+		}
+
+		/// <summary>
+		/// Configure the default trace level.
+		/// </summary>
+		/// <param name="traceLevel">The default trace level.</param>
+		protected virtual void CheckTraceLevelAndConfigure(HttpClientSaTraceLevel traceLevel)
+		{
+			TraceLevel = traceLevel;
+		}
+
+		/// <summary>
+		/// Configure the PostDbLogged callback.
+		/// </summary>
+		/// <param name="postDbLogged">The callback</param>
+		protected virtual void CheckPostDbLoggedAndConfigure(Action<HttpCall> postDbLogged)
+		{
+			PostDbLogged = postDbLogged;
+		}
+
+		#endregion
+
 		#region internal methods
 
 		internal HttpContent GetHttpContent(object data, string datatype)
@@ -711,35 +815,117 @@ namespace Ucsb.Sa.Enterprise.ClientExtensions
 				request.AddTransactionPropagationToken();
 			}
 
-			HttpResponseMessage response;
+			HttpResponseMessage response = null;
+			Exception exception = null;
 			HttpContent httpContent = null;
 			DateTime requestTime = DateTime.Now;
 
-			switch (method.Method)
+			try
 			{
-				case "PUT":
-				case "POST":
-					httpContent = GetHttpContent(data, datatype);
-					request.Content = httpContent;
-					response = await base.SendAsync(request);
-					break;
-					
-				default:
-					response = await base.SendAsync(request);
-					break;
+				switch (method.Method)
+				{
+					case "PUT":
+					case "POST":
+						httpContent = GetHttpContent(data, datatype);
+						request.Content = httpContent;
+						response = await SendAsyncUcsb(request).ConfigureAwait(false);
+						break;
 
+					default:
+						response = await SendAsyncUcsb(request).ConfigureAwait(false);
+						break;
+
+				}
 			}
+			catch (Exception e)
+			{
+
+				// If the background thread which creates an EF DB context and there is a "currently unhandled exception" on
+				// the stack, then EF won't create the DB Context. So, if an exception is rethrown and this code run in the
+				// finally block, then nothing gets written to the database.
+				  
+				// Having this in the catch block gets around this behavior. But, if no exception occurs then we still need
+				// to write the info to the database; so we have to duplicate the code in the finally block.
+				 
+				exception = e;
+
+				PostCallProcessing(request, response, exception, requestTime, data, datatype, PostDbLogged, PostException);
+				
+				throw;
+			}
+			finally
+			{
+				//	see catch block above for explanation
+				if (exception == null)
+				{	
+					PostCallProcessing(request, response, exception, requestTime, data, datatype, PostDbLogged, PostException);
+				}
+			}
+			return response;
+		}
+
+		/// <summary>
+		/// A wrapper for <see cref="HttpClient.SendAsync(HttpRequestMessage, CancellationToken)" />. This
+		/// is used internally to provide the same functionality as <see cref="DelegatingHandler" />s. Here's
+		/// a stackoverflow post on <see cref="HttpClientFactory" />,
+		/// https://stackoverflow.com/questions/18976042/httpclientfactory-create-vs-new-httpclient.
+		/// </summary>
+		/// <param name="request"></param>
+		/// <param name="cancellationToken"></param>
+		/// <returns></returns>
+		public Task<HttpResponseMessage> SendAsyncUcsb(
+			HttpRequestMessage request,
+			CancellationToken cancellationToken = default(CancellationToken)
+		)
+		{
+			if (this.SendAsyncMessageHandler != null)
+			{
+				var invoker = new HttpMessageInvoker(this.SendAsyncMessageHandler);
+				return invoker.SendAsync(request, cancellationToken);
+			}
+
+			//	this next line _should_ never run; but its a fall back if needed
+			return this.SendAsync(request, cancellationToken);
+		}
+
+		/// <summary>
+		/// This will colect all the final information needed to write the call information to the database
+		/// </summary>
+		/// <param name="request">Http Request</param>
+		/// <param name="response">Http Response</param>
+		/// <param name="exception">If an exception occured, this is the exception</param>
+		/// <param name="requestTime">Request Date time </param>
+		/// <param name="postDbLogged">A callback for after the call has been logged to the database</param>
+		/// <param name="data">The payload that gets encoded into the request</param>
+		/// <param name="datatype">The datatype of the encoding (ie. json, etc).</param>
+		/// <param name="postException">A callback for after the exception happens</param>
+		public void PostCallProcessing(
+			HttpRequestMessage request,
+			HttpResponseMessage response,
+			Exception exception,
+			DateTime requestTime,
+			object data,
+			string datatype = "json",
+			Action<HttpCall> postDbLogged = null,
+			Action<HttpCall> postException = null 
+		)
+		{
 			DateTime responseTime = DateTime.Now;
 			LastHttpResponseMessage = response;
 
-			switch(TraceLevel)
+			switch (TraceLevel)
 			{
+				case HttpClientSaTraceLevel.Error:
+					if (exception != null)
+					{
+						SaveCall(request, response, exception, requestTime, responseTime, data, datatype, PostDbLogged, PostException);
+					}
+					break;
+
 				case HttpClientSaTraceLevel.All:
-					SaveCall(response, requestTime, responseTime, data, datatype, PostDbLogged);
+					SaveCall(request, response, exception, requestTime, responseTime, data, datatype, PostDbLogged, PostException);
 					break;
 			}
-
-			return response;
 		}
 
 		/// <summary>
@@ -747,23 +933,30 @@ namespace Ucsb.Sa.Enterprise.ClientExtensions
 		/// thread. So, if the application closes exits too quickly or an exception occurs nothing
 		/// will be written to the database.
 		/// </summary>
+		/// <param name="request">Http Request</param>
 		/// <param name="response">Http Response</param>
+		/// <param name="exception">If an exception occured, this is the exception</param>
 		/// <param name="requestDateTime">Request Date time </param>
 		/// <param name="responseDateTime">Response Datetime</param>
 		/// <param name="postDbLogged">A callback for after the call has been logged to the database</param>
 		/// <param name="data">The payload that gets encoded into the request</param>
 		/// <param name="datatype">The datatype of the encoding (ie. json, etc).</param>
+		/// <param name="postException">A callback for after the exception happens</param>
 		public void SaveCall(
+			HttpRequestMessage request,
 			HttpResponseMessage response,
+			Exception exception,
 			DateTime requestDateTime,
 			DateTime responseDateTime,
 			object data,
 			string datatype = "json",
-			Action<HttpCall> postDbLogged = null
+			Action<HttpCall> postDbLogged = null,
+			Action<HttpCall> postException = null
 		)
 		{
-			var call = CreateCall(response, requestDateTime, responseDateTime, data, datatype);
-			SaveCall(call, postDbLogged);
+			var call = CreateCall(request, response, requestDateTime, responseDateTime, data, datatype);
+			var errors = CreateErrors(request, requestDateTime, exception);
+			SaveCall(call, errors, postDbLogged, postException);
 		}
 
 		/// <summary>
@@ -772,26 +965,33 @@ namespace Ucsb.Sa.Enterprise.ClientExtensions
 		/// will be written to the database.
 		/// </summary>
 		/// <param name="httpCall">Http Call Object for Tracing</param>
+		/// <param name="errors">If an exception occurred on the call, and all of its inner exceptions</param>
 		/// <param name="postDbLogged">A callback for after the call has been logged to the database</param>
+		/// <param name="postException">A callback for after the exception happens</param>
 		public void SaveCall(
 			HttpCall call,
-			Action<HttpCall> postDbLogged
+			List<HttpError> errors,
+			Action<HttpCall> postDbLogged,
+			Action<HttpCall> postException
 		)
 		{
-			var args = new SaveCallArgs() { Call = call, PostDbLogged = postDbLogged };
+			var args = new SaveCallArgs() { Call = call, Errors = errors, PostDbLogged = postDbLogged, PostException = postException};
 			ThreadPool.QueueUserWorkItem(SaveCall, args);
+			//SaveCall(args);
 		}
 
 		/// <summary>
 		/// Create the Call object which can be saved to the tracing tables. This will
 		/// not save. Use SaveCall to create the object and save.
 		/// </summary>
+		/// <param name="request">Http Request</param>
 		/// <param name="response">Http Response</param>
 		/// <param name="requestDateTime">Request Date time </param>
 		/// <param name="responseDateTime">Response Datetime</param>
 		/// <param name="data">The payload that gets encoded into the request</param>
 		/// <param name="datatype">The datatype of the encoding (ie. json, etc).</param>
 		public HttpCall CreateCall(
+			HttpRequestMessage request,
 			HttpResponseMessage response,
 			DateTime requestDateTime,
 			DateTime responseDateTime,
@@ -802,44 +1002,50 @@ namespace Ucsb.Sa.Enterprise.ClientExtensions
 			HttpCall call = new HttpCall();
 
 			// request info
-			if(response.RequestMessage.Content != null)
+			if(request.Content != null)
 			{
 				var newContent = GetHttpContent(data, datatype);
 				call.RequestBody = newContent.ReadAsStringAsync().Result;
 			}
-			call.Method = response.RequestMessage.Method.Method;
+			call.Method = request.Method.Method;
 			call.Server = Environment.MachineName;
 			call.RequestDate = responseDateTime;
 
 			//	if the requestUri has the schema in it (http://) then only the request uri should
 			//	be recorded. The HttpClient object will ignore the BaseAddress if the full url path
 			//	is given in the requestUri.
-			call.Uri = response.RequestMessage.RequestUri.AbsoluteUri;
+			call.Uri = request.RequestUri.AbsoluteUri;
 			
 			// request header 
 			string headers = string.Empty;
 			int counter = 0;
 
-			foreach (var header in response.RequestMessage.Headers)
+			foreach (var header in request.Headers)
 			{
 				headers += header.Key + " = " + header.Value.ElementAt(counter) + Environment.NewLine;
 
 			}
 			call.RequestHeader = headers;
 
-			// response info 
-			call.ResponseBody = response.Content.ReadAsStringAsync().Result;
-			call.ResponseDate = responseDateTime;
-			call.StatusCode = (int)response.StatusCode;
-
-			// create header info from header collection 
-			var responseheaders = string.Empty;
-			foreach (var header in response.Headers)
+			call.ResponseDate = responseDateTime;   // this always has to be set or EF blows up because .NET DateTime Range
+													// starts at 1/1/0001, and that date is father back than SQL's DateTime
+													// can handle. SQL's DateTime2 can handle it, but we didn't use that.
+													// Error Message: The conversion of a datetime2 data type to a datetime data type resulted in an out-of-range value
+			if (response != null)
 			{
-				responseheaders += header.Key + " = " + header.Value + Environment.NewLine;
+				// response info 
+				call.ResponseBody = response.Content.ReadAsStringAsync().Result;
+				call.StatusCode = (int)response.StatusCode;
+
+				// create header info from header collection 
+				var responseheaders = string.Empty;
+				foreach (var header in response.Headers)
+				{
+					responseheaders += header.Key + " = " + header.Value + Environment.NewLine;
+				}
+				// Header info from request header 
+				call.ResponseHeader = responseheaders;
 			}
-			// Header info from request header 
-			call.ResponseHeader = responseheaders;
 
 			// time diff between call 
 			call.TimeDiff = responseDateTime - requestDateTime;
@@ -850,12 +1056,48 @@ namespace Ucsb.Sa.Enterprise.ClientExtensions
 		}
 
 		/// <summary>
+		/// On Error call this even handler 
+		/// </summary>
+		/// <param name="request">request</param>
+		/// <param name="sender">sender</param>
+		/// <param name="e"></param>
+		public List<HttpError> CreateErrors(HttpRequestMessage request, DateTime requestDateTime, Exception exception)
+		{
+			var errors = new List<HttpError>();
+
+			var uri = request.RequestUri.AbsoluteUri;
+			
+			var currentException = exception;
+			while (currentException != null)
+			{
+				var error = new HttpError();
+				error.Uri = uri;
+				error.RequestDate = requestDateTime;
+				error.Message = currentException.Message;
+				error.Source = currentException.Source;
+				error.StackTrace = currentException.StackTrace;
+				error.TargetSite = currentException.TargetSite.Name;
+				error.Type = currentException.GetType().FullName;
+
+				errors.Add(error);
+				currentException = currentException.InnerException;
+			}
+
+			
+
+			return errors;
+		}
+
+		/// <summary>
 		/// Object state to be used with the callback
 		/// </summary>
 		private class SaveCallArgs
 		{
 			public HttpCall Call;
+			public List<HttpError> Errors;
 			public Action<HttpCall> PostDbLogged;
+			public Action<HttpCall> PostException;
+
 		}
 
 		/// <summary>
@@ -877,6 +1119,24 @@ namespace Ucsb.Sa.Enterprise.ClientExtensions
 				{
 					db.Calls.Add(call);
 					db.SaveChanges();
+
+					var errors = args.Errors;
+					if (errors.Count > 0)
+					{
+						foreach (var error in errors)
+						{
+							error.CallId = call.CallId;
+							db.Errors.Add(error);
+						}
+						db.SaveChanges();
+
+						if (args.PostException != null)
+						{
+							args.PostException(call);
+						}
+					}
+
+					
 				}
 
 				if (args.PostDbLogged != null)

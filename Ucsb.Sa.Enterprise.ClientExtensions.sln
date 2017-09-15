@@ -15,6 +15,10 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Documentation", "Documentat
 		sc_Create_Db_Objects.sql = sc_Create_Db_Objects.sql
 	EndProjectSection
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Ucsb.Sa.Enterprise.ClientExtensions.Redis", "Ucsb.Sa.Enterprise.ClientExtensions.Redis\Ucsb.Sa.Enterprise.ClientExtensions.Redis.csproj", "{C7D833E8-FACA-456E-89E0-AEC767E44C00}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Ucsb.Sa.Enterprise.ClientExtensions.Redis.Tests", "Ucsb.Sa.Enterprise.ClientExtensions.Redis.Tests\Ucsb.Sa.Enterprise.ClientExtensions.Redis.Tests.csproj", "{524E9351-CD92-4FCE-B4C5-54513694E0CA}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -29,20 +33,34 @@ Global
 		{53ABA40D-E584-4F9F-B8F7-E10290399083}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{53ABA40D-E584-4F9F-B8F7-E10290399083}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{53ABA40D-E584-4F9F-B8F7-E10290399083}.Release|Any CPU.Build.0 = Release|Any CPU
+		{C7D833E8-FACA-456E-89E0-AEC767E44C00}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{C7D833E8-FACA-456E-89E0-AEC767E44C00}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{C7D833E8-FACA-456E-89E0-AEC767E44C00}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{C7D833E8-FACA-456E-89E0-AEC767E44C00}.Release|Any CPU.Build.0 = Release|Any CPU
+		{524E9351-CD92-4FCE-B4C5-54513694E0CA}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{524E9351-CD92-4FCE-B4C5-54513694E0CA}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{524E9351-CD92-4FCE-B4C5-54513694E0CA}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{524E9351-CD92-4FCE-B4C5-54513694E0CA}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
 	EndGlobalSection
 	GlobalSection(TeamFoundationVersionControl) = preSolution
-		SccNumberOfProjects = 3
+		SccNumberOfProjects = 5
 		SccEnterpriseProvider = {4CA58AB2-18FA-4F8D-95D4-32DDF27D184C}
-		SccTeamFoundationServer = http://tfs.sa.ucsb.edu/tfs/sist
-		SccProjectUniqueName0 = Ucsb.Sa.Enterprise.ClientExtensions\\Ucsb.Sa.Enterprise.ClientExtensions.csproj
-		SccProjectName0 = Ucsb.Sa.Enterprise.ClientExtensions
-		SccLocalPath0 = Ucsb.Sa.Enterprise.ClientExtensions
-		SccProjectUniqueName1 = Ucsb.Sa.Enterprise.ClientExtensions.Tests\\Ucsb.Sa.Enterprise.ClientExtensions.Tests.csproj
-		SccProjectName1 = Ucsb.Sa.Enterprise.ClientExtensions.Tests
-		SccLocalPath1 = Ucsb.Sa.Enterprise.ClientExtensions.Tests
-		SccLocalPath2 = .
+		SccTeamFoundationServer = https://sist-sa-ucsb.visualstudio.com/
+		SccLocalPath0 = .
+		SccProjectUniqueName1 = Ucsb.Sa.Enterprise.ClientExtensions\\Ucsb.Sa.Enterprise.ClientExtensions.csproj
+		SccProjectName1 = Ucsb.Sa.Enterprise.ClientExtensions
+		SccLocalPath1 = Ucsb.Sa.Enterprise.ClientExtensions
+		SccProjectUniqueName2 = Ucsb.Sa.Enterprise.ClientExtensions.Tests\\Ucsb.Sa.Enterprise.ClientExtensions.Tests.csproj
+		SccProjectName2 = Ucsb.Sa.Enterprise.ClientExtensions.Tests
+		SccLocalPath2 = Ucsb.Sa.Enterprise.ClientExtensions.Tests
+		SccProjectUniqueName3 = Ucsb.Sa.Enterprise.ClientExtensions.Redis\\Ucsb.Sa.Enterprise.ClientExtensions.Redis.csproj
+		SccProjectName3 = Ucsb.Sa.Enterprise.ClientExtensions.Redis
+		SccLocalPath3 = Ucsb.Sa.Enterprise.ClientExtensions.Redis
+		SccProjectUniqueName4 = Ucsb.Sa.Enterprise.ClientExtensions.Redis.Tests\\Ucsb.Sa.Enterprise.ClientExtensions.Redis.Tests.csproj
+		SccProjectName4 = Ucsb.Sa.Enterprise.ClientExtensions.Redis.Tests
+		SccLocalPath4 = Ucsb.Sa.Enterprise.ClientExtensions.Redis.Tests
 	EndGlobalSection
 EndGlobal

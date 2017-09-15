@@ -1,47 +1,54 @@
-﻿using System.Data.Entity;
+﻿using System.Data;
+using System.Data.Entity;
+using System.Data.Entity.Infrastructure.Interception;
 using Ucsb.Sa.Enterprise.ClientExtensions.Data.Mappings;
 
 namespace Ucsb.Sa.Enterprise.ClientExtensions.Data
 {
-    /// <summary>
-    /// Db Context Class for Instument DB
-    /// </summary>
-    public class InstrumentationDbContext : DbContext
-    {
-        #region "constructor"
+	/// <summary>
+	/// Db Context Class for Instument DB
+	/// </summary>
+	public class InstrumentationDbContext : DbContext
+	{
+		#region "constructor"
 
-        /// <summary>
-        /// Default Construtor and pass ConnectionString
-        /// </summary>
-        public InstrumentationDbContext()
-            : base("Instrumentation")
-        {
+		static InstrumentationDbContext()
+		{
+			DbInterception.Add(new IsolationLevelInterceptor(IsolationLevel.ReadUncommitted));
+		}
 
-        }
+		/// <summary>
+		/// Default Construtor and pass ConnectionString
+		/// </summary>
+		public InstrumentationDbContext()
+			: base("Instrumentation")
+		{
 
-        #endregion
+		}
 
-        #region "DbSets Mappings"
+		#endregion
 
-        public DbSet<HttpCall> Calls { get; set; }
-        public DbSet<HttpError> Errors { get; set; }
+		#region "DbSets Mappings"
 
-        #endregion
+		public DbSet<HttpCall> Calls { get; set; }
+		public DbSet<HttpError> Errors { get; set; }
 
-        #region "Model Binder"
+		#endregion
 
-        /// <summary>
-        /// Model Binders to set mappings
-        /// </summary>
-        /// <param name="modelBuilder"></param>
-        protected override void OnModelCreating(DbModelBuilder modelBuilder)
-        {
-            modelBuilder.Configurations.Add(new HttpCallMap());
-            modelBuilder.Configurations.Add(new HttpErrorMap());
+		#region "Model Binder"
 
-            base.OnModelCreating(modelBuilder);
-        }
+		/// <summary>
+		/// Model Binders to set mappings
+		/// </summary>
+		/// <param name="modelBuilder"></param>
+		protected override void OnModelCreating(DbModelBuilder modelBuilder)
+		{
+			modelBuilder.Configurations.Add(new HttpCallMap());
+			modelBuilder.Configurations.Add(new HttpErrorMap());
 
-        #endregion
-    }
+			base.OnModelCreating(modelBuilder);
+		}
+
+		#endregion
+	}
 }
